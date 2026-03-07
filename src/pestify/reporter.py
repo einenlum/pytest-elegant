@@ -212,7 +212,7 @@ class PestifyTerminalReporter(TerminalReporter):
             return f"{minutes}m {seconds}s"
 
     def _print_failure_details(self, report: TestReport) -> None:
-        """Print detailed failure information.
+        """Print detailed failure information with code context.
 
         Args:
             report: test report object with failure information
@@ -221,13 +221,73 @@ class PestifyTerminalReporter(TerminalReporter):
             return
 
         # Print a separator
-        self.write_line("  " + "─" * 40, red=True)
+        self.write_line("  " + "─" * 40)
 
-        # Print the failure message
+        # Parse the longrepr to extract useful information
         longrepr_str = str(report.longrepr)
-        for line in longrepr_str.split("\n"):
-            if line.strip():
-                self.write_line(f"  {line}", red=True)
+        lines = longrepr_str.split("\n")
+
+        # Extract the assertion error or exception message
+        error_msg = None
+        file_path = None
+        line_number = None
+        code_line = None
+
+        for i, line in enumerate(lines):
+            # Look for the main error message (usually at the start)
+            if i == 0 and (
+                "AssertionError" in line
+                or "Error" in line
+                or "Exception" in line
+            ):
+                error_msg = line.strip()
+
+            # Look for file location and code context
+            # Format: "    File \"path/to/file.py\", line 12, in test_name"
+            if 'File "' in line and ", line " in line:
+                try:
+                    # Extract file path and line number
+                    parts = line.split('File "')[1].split('", line ')
+                    file_path = parts[0]
+                    line_number = parts[1].split(",")[0].strip()
+                except (IndexError, ValueError):
+                    pass
+
+            # Look for the actual code line (usually indented after file location)
+            # The code line typically starts with whitespace and might have an arrow
+            if file_path and i > 0 and line.strip() and not line.strip().startswith(
+                "File"
+            ):
+                # Check if this looks like code (not an error message)
+                stripped = line.strip()
+                if (
+                    not stripped.startswith("E ")
+                    and not stripped.endswith(":")
+                    and not "Error" in stripped[:20]
+                ):
+                    # Remove pytest's ">" marker if present
+                    code_line = stripped.lstrip(">").strip()
+                    break
+
+        # Print the error message if found
+        if error_msg:
+            self.write_line(f"  {error_msg}", red=True)
+        else:
+            # Fallback: print first non-empty line
+            for line in lines:
+                if line.strip():
+                    self.write_line(f"  {line.strip()}", red=True)
+                    break
+
+        # Print file location if found
+        if file_path and line_number:
+            self.write_line(f'    File "{file_path}", line {line_number}')
+
+        # Print the code line with an arrow (Pest-style)
+        if code_line and line_number:
+            self.write_line(f"  → {line_number.rjust(4)}   {code_line}", red=True)
+        elif code_line:
+            self.write_line(f"  →   {code_line}", red=True)
 
         self.write_line("")
 
