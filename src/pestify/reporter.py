@@ -52,6 +52,10 @@ class PestifyTerminalReporter(TerminalReporter):
         self._group_by_file = config.getini("pestify_group_by_file")
         self._show_duration = config.getini("pestify_show_duration")
 
+        # Get verbosity level for verbose mode support
+        # 0 = normal, 1 = -v, 2+ = -vv or more
+        self._verbosity = config.option.verbose
+
         # Get appropriate symbols based on terminal capabilities
         self._symbols = get_symbols()
         self._terminal_width = get_terminal_width()
@@ -199,12 +203,19 @@ class PestifyTerminalReporter(TerminalReporter):
         if not results:
             return
 
+        # In verbose mode, show full path; otherwise use as-is
+        display_path = file_path
+        if self._verbosity == 0 and len(file_path) > 60:
+            # Only truncate in non-verbose mode
+            from pestify.utils import truncate_path
+            display_path = truncate_path(file_path, 60)
+
         # Print file header with PASS/FAIL status
         has_failures = self._file_has_failures.get(file_path, False)
         if has_failures:
-            self.write_line(f"\n  FAIL  {file_path}", red=True, bold=True)
+            self.write_line(f"\n  FAIL  {display_path}", red=True, bold=True)
         else:
-            self.write_line(f"\n  PASS  {file_path}", green=True, bold=True)
+            self.write_line(f"\n  PASS  {display_path}", green=True, bold=True)
 
         # Print each test result
         for report, symbol in results:
@@ -234,14 +245,16 @@ class PestifyTerminalReporter(TerminalReporter):
         if parameters:
             display_name = f"{display_name}[{parameters}]"
 
-        # Calculate max length for test name (leave room for symbol, duration, padding)
-        # Format: "  ✓ test_name 0.12s"
-        # Reserve: 2 (indent) + 2 (symbol + space) + 7 (duration) + 2 (padding) = 13
-        max_name_length = max(40, self._terminal_width - 13)
+        # In verbose mode, don't truncate test names
+        if self._verbosity == 0:
+            # Calculate max length for test name (leave room for symbol, duration, padding)
+            # Format: "  ✓ test_name 0.12s"
+            # Reserve: 2 (indent) + 2 (symbol + space) + 7 (duration) + 2 (padding) = 13
+            max_name_length = max(40, self._terminal_width - 13)
 
-        # Truncate if needed
-        if len(display_name) > max_name_length:
-            display_name = truncate_test_name(display_name, max_name_length)
+            # Truncate if needed
+            if len(display_name) > max_name_length:
+                display_name = truncate_test_name(display_name, max_name_length)
 
         # Build the result line
         result_line = f"  {symbol} {display_name}"
@@ -304,7 +317,18 @@ class PestifyTerminalReporter(TerminalReporter):
         # Print a separator
         self.write_line("  " + "─" * 40)
 
-        # Parse the longrepr to extract useful information
+        # In very verbose mode (-vv), show full stack trace
+        if self._verbosity >= 2:
+            # Show the complete traceback
+            longrepr_str = str(report.longrepr)
+            for line in longrepr_str.split("\n"):
+                if line.strip():
+                    # Add indentation for consistency
+                    self.write_line(f"  {line}")
+            self.write_line("")
+            return
+
+        # Normal mode: parse the longrepr to extract useful information
         longrepr_str = str(report.longrepr)
         lines = longrepr_str.split("\n")
 
@@ -360,9 +384,13 @@ class PestifyTerminalReporter(TerminalReporter):
                     self.write_line(f"  {line.strip()}", red=True)
                     break
 
-        # Print file location if found
+        # Print file location if found (show full path in -v mode)
         if file_path and line_number:
-            self.write_line(f'    File "{file_path}", line {line_number}')
+            display_file_path = file_path
+            if self._verbosity == 0 and len(file_path) > 60:
+                from pestify.utils import truncate_path
+                display_file_path = truncate_path(file_path, 60)
+            self.write_line(f'    File "{display_file_path}", line {line_number}')
 
         # Print the code line with an arrow (Pest-style)
         if code_line and line_number:
