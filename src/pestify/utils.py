@@ -2,6 +2,7 @@
 
 import os
 import shutil
+import sys
 from pathlib import Path
 
 
@@ -140,3 +141,162 @@ def get_file_path_from_nodeid(nodeid: str) -> str:
         'tests/test_foo.py'
     """
     return nodeid.split("::")[0]
+
+
+def supports_unicode() -> bool:
+    """
+    Check if the terminal supports Unicode characters.
+
+    Returns:
+        True if Unicode is supported, False otherwise
+
+    Examples:
+        >>> supports_unicode()  # doctest: +SKIP
+        True
+    """
+    # Check encoding
+    encoding = getattr(sys.stdout, "encoding", None)
+    if not encoding:
+        return False
+
+    # Common encodings that support Unicode
+    unicode_encodings = ["utf-8", "utf8", "utf-16", "utf-32"]
+    if encoding.lower() in unicode_encodings:
+        return True
+
+    # Try to encode test characters
+    try:
+        "✓✗⨯".encode(encoding)
+        return True
+    except (UnicodeEncodeError, AttributeError):
+        return False
+
+
+def get_symbols(use_unicode: bool = True) -> dict[str, str]:
+    """
+    Get appropriate symbols based on terminal capabilities.
+
+    Args:
+        use_unicode: Whether to use Unicode symbols (auto-detected if True)
+
+    Returns:
+        Dictionary mapping outcome types to symbols
+
+    Examples:
+        >>> symbols = get_symbols(use_unicode=False)
+        >>> symbols['passed']
+        '.'
+        >>> symbols = get_symbols(use_unicode=True)  # doctest: +SKIP
+        >>> symbols['passed']  # doctest: +SKIP
+        '✓'
+    """
+    if use_unicode and supports_unicode():
+        return {
+            "passed": "✓",
+            "failed": "⨯",
+            "skipped": "-",
+            "xfailed": "x",
+            "xpassed": "X",
+            "error": "E",
+        }
+    else:
+        # ASCII fallback
+        return {
+            "passed": ".",
+            "failed": "F",
+            "skipped": "s",
+            "xfailed": "x",
+            "xpassed": "X",
+            "error": "E",
+        }
+
+
+def truncate_test_name(test_name: str, max_length: int = 80) -> str:
+    """
+    Truncate long test names intelligently.
+
+    Preserves important parts like test name and parameters.
+
+    Args:
+        test_name: The test name to truncate
+        max_length: Maximum length of the returned name
+
+    Returns:
+        Truncated test name string
+
+    Examples:
+        >>> truncate_test_name("test_very_long_function_name_with_many_words", 30)
+        'test_very_long_func...ds'
+        >>> truncate_test_name("test_foo[param1-param2]", 50)
+        'test_foo[param1-param2]'
+    """
+    if len(test_name) <= max_length:
+        return test_name
+
+    # Check if this is a parametrized test (has brackets)
+    if "[" in test_name and "]" in test_name:
+        # Split into name and parameters
+        base_name, params = test_name.split("[", 1)
+        params = "[" + params
+
+        # Calculate space available for base name
+        available = max_length - len(params) - 3  # 3 for "..."
+
+        if available < 10:
+            # Not enough space, truncate the whole thing
+            return test_name[:max_length - 3] + "..."
+
+        # Truncate base name and keep params
+        return base_name[:available] + "..." + params
+    else:
+        # No parameters, just truncate with ellipsis in middle
+        # Keep beginning and end
+        if max_length < 10:
+            return test_name[:max_length]
+
+        keep_start = (max_length - 3) // 2
+        keep_end = max_length - 3 - keep_start
+        return test_name[:keep_start] + "..." + test_name[-keep_end:]
+
+
+def extract_test_parts(nodeid: str) -> tuple[str, str, str | None, str | None]:
+    """
+    Extract all parts from a pytest nodeid.
+
+    Args:
+        nodeid: Full pytest node ID
+
+    Returns:
+        Tuple of (file_path, test_name, class_name, parameters)
+
+    Examples:
+        >>> extract_test_parts("tests/test_foo.py::test_bar")
+        ('tests/test_foo.py', 'test_bar', None, None)
+        >>> extract_test_parts("tests/test_foo.py::TestClass::test_method")
+        ('tests/test_foo.py', 'test_method', 'TestClass', None)
+        >>> extract_test_parts("tests/test_foo.py::test_bar[param1-param2]")
+        ('tests/test_foo.py', 'test_bar', None, 'param1-param2')
+        >>> extract_test_parts("tests/test_foo.py::TestClass::test_method[1-2]")
+        ('tests/test_foo.py', 'test_method', 'TestClass', '1-2')
+    """
+    # Split by ::
+    parts = nodeid.split("::")
+    file_path = parts[0]
+
+    if len(parts) == 1:
+        return (file_path, nodeid, None, None)
+
+    # Check for parametrized test (contains [])
+    parameters = None
+    if "[" in parts[-1] and "]" in parts[-1]:
+        test_name, params = parts[-1].split("[", 1)
+        parameters = params.rstrip("]")
+    else:
+        test_name = parts[-1]
+
+    # Check for class (3 parts: file::Class::method)
+    class_name = None
+    if len(parts) == 3:
+        class_name = parts[1]
+
+    return (file_path, test_name, class_name, parameters)

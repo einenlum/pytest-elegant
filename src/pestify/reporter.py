@@ -10,6 +10,13 @@ from _pytest.config import Config
 from _pytest.reports import TestReport
 from _pytest.terminal import TerminalReporter
 
+from pestify.utils import (
+    extract_test_parts,
+    get_symbols,
+    get_terminal_width,
+    truncate_test_name,
+)
+
 
 class PestifyTerminalReporter(TerminalReporter):
     """Custom reporter that formats pytest output in Pest style.
@@ -35,12 +42,19 @@ class PestifyTerminalReporter(TerminalReporter):
         self._total_passed = 0
         self._total_failed = 0
         self._total_skipped = 0
+        self._total_xfailed = 0
+        self._total_xpassed = 0
+        self._total_errors = 0
         self._total_duration = 0.0
 
         # Read configuration options
         self._show_context = config.getini("pestify_show_context")
         self._group_by_file = config.getini("pestify_group_by_file")
         self._show_duration = config.getini("pestify_show_duration")
+
+        # Get appropriate symbols based on terminal capabilities
+        self._symbols = get_symbols()
+        self._terminal_width = get_terminal_width()
 
     def write_sep(
         self,
@@ -105,7 +119,18 @@ class PestifyTerminalReporter(TerminalReporter):
         elif report.failed:
             self._total_failed += 1
         elif report.skipped:
-            self._total_skipped += 1
+            # Check if this is xfailed or xpassed
+            if hasattr(report, "wasxfail"):
+                if report.skipped:
+                    self._total_xfailed += 1
+                else:
+                    self._total_skipped += 1
+            else:
+                self._total_skipped += 1
+
+        # Handle xpassed (expected fail but passed)
+        if hasattr(report, "wasxfail") and report.passed:
+            self._total_xpassed += 1
 
         self._total_duration += report.duration
 
@@ -141,16 +166,25 @@ class PestifyTerminalReporter(TerminalReporter):
             report: test report object
 
         Returns:
-            Symbol string (✓, ⨯, -, etc.)
+            Symbol string (✓, ⨯, -, etc.) based on terminal capabilities
         """
+        # Handle xpassed (expected to fail but passed)
+        if hasattr(report, "wasxfail") and report.passed:
+            return self._symbols["xpassed"]
+
+        # Handle xfailed (expected to fail and did fail)
+        if hasattr(report, "wasxfail") and report.skipped:
+            return self._symbols["xfailed"]
+
+        # Standard outcomes
         if report.passed:
-            return "✓"
+            return self._symbols["passed"]
         elif report.failed:
-            return "⨯"
+            return self._symbols["failed"]
         elif report.skipped:
-            return "-"
+            return self._symbols["skipped"]
         else:
-            return "?"
+            return self._symbols.get("error", "?")
 
     def _print_file_results(self, file_path: str) -> None:
         """Print all results for a given test file.
@@ -186,30 +220,59 @@ class PestifyTerminalReporter(TerminalReporter):
             report: test report object
             symbol: symbol to display (✓, ⨯, etc.)
         """
-        # Extract test name from nodeid
-        if "::" in report.nodeid:
-            _, test_name = report.nodeid.split("::", 1)
-        else:
-            test_name = report.nodeid
+        # Extract test parts (file, name, class, parameters)
+        file_path, test_name, class_name, parameters = extract_test_parts(report.nodeid)
+
+        # Build display name
+        display_name = test_name
+
+        # Add class name if present (for test classes)
+        if class_name:
+            display_name = f"{class_name}::{test_name}"
+
+        # Add parameters if present (for parametrized tests)
+        if parameters:
+            display_name = f"{display_name}[{parameters}]"
+
+        # Calculate max length for test name (leave room for symbol, duration, padding)
+        # Format: "  ✓ test_name 0.12s"
+        # Reserve: 2 (indent) + 2 (symbol + space) + 7 (duration) + 2 (padding) = 13
+        max_name_length = max(40, self._terminal_width - 13)
+
+        # Truncate if needed
+        if len(display_name) > max_name_length:
+            display_name = truncate_test_name(display_name, max_name_length)
 
         # Build the result line
-        result_line = f"  {symbol} {test_name}"
+        result_line = f"  {symbol} {display_name}"
 
         # Add duration if enabled
         if self._show_duration:
             duration_str = self._format_duration(report.duration)
             result_line += f" {duration_str}"
 
-        # Print with appropriate color
-        if report.passed:
-            self.write_line(result_line, green=True)
+        # Print with appropriate color based on outcome
+        color_kwargs = {}
+
+        # Handle xpassed (expected fail but passed) - yellow/bold
+        if hasattr(report, "wasxfail") and report.passed:
+            color_kwargs = {"yellow": True, "bold": True}
+        # Handle xfailed (expected fail) - yellow
+        elif hasattr(report, "wasxfail") and report.skipped:
+            color_kwargs = {"yellow": True}
+        # Standard outcomes
+        elif report.passed:
+            color_kwargs = {"green": True}
         elif report.failed:
-            self.write_line(result_line, red=True)
-            # Show failure details immediately if context is enabled
-            if self._show_context:
-                self._print_failure_details(report)
+            color_kwargs = {"red": True}
         elif report.skipped:
-            self.write_line(result_line, yellow=True)
+            color_kwargs = {"yellow": True}
+
+        self.write_line(result_line, **color_kwargs)
+
+        # Show failure details immediately if failed and context is enabled
+        if report.failed and self._show_context:
+            self._print_failure_details(report)
 
     def _format_duration(self, duration: float) -> str:
         """Format test duration for display.
@@ -339,7 +402,19 @@ class PestifyTerminalReporter(TerminalReporter):
         if self._total_skipped > 0:
             summary_parts.append(f"{self._total_skipped} skipped")
 
-        total_tests = self._total_passed + self._total_failed + self._total_skipped
+        if self._total_xfailed > 0:
+            summary_parts.append(f"{self._total_xfailed} xfailed")
+
+        if self._total_xpassed > 0:
+            summary_parts.append(f"{self._total_xpassed} xpassed")
+
+        total_tests = (
+            self._total_passed
+            + self._total_failed
+            + self._total_skipped
+            + self._total_xfailed
+            + self._total_xpassed
+        )
         summary_parts.append(f"{total_tests} total")
 
         # Print summary

@@ -121,12 +121,25 @@ def pytest_report_teststatus(
     if report.when != "call":
         return None
 
+    # Get symbols (with unicode detection)
+    from pestify.utils import get_symbols
+    symbols = get_symbols()
+
+    # Handle xpassed (expected to fail but passed)
+    if hasattr(report, "wasxfail") and report.outcome == "passed":
+        return ("xpassed", symbols["xpassed"], ("XPASS", {"yellow": True, "bold": True}))
+
+    # Handle xfailed (expected to fail and did)
+    if hasattr(report, "wasxfail") and report.outcome == "skipped":
+        return ("xfailed", symbols["xfailed"], ("XFAIL", {"yellow": True}))
+
+    # Standard outcomes
     if report.outcome == "passed":
-        return ("passed", "✓", ("PASSED", {"green": True}))
+        return ("passed", symbols["passed"], ("PASSED", {"green": True}))
     elif report.outcome == "failed":
-        return ("failed", "⨯", ("FAILED", {"red": True}))
+        return ("failed", symbols["failed"], ("FAILED", {"red": True}))
     elif report.outcome == "skipped":
-        return ("skipped", "-", ("SKIPPED", {"yellow": True}))
+        return ("skipped", symbols["skipped"], ("SKIPPED", {"yellow": True}))
 
     return None
 
