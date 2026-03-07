@@ -49,22 +49,19 @@ def pytest_addoption(parser: Parser) -> None:
     )
 
 
-@pytest.hookimpl(hookwrapper=True)
-def pytest_configure(config: Config) -> Any:
+@pytest.hookimpl(trylast=True)
+def pytest_configure(config: Config) -> None:
     """Configure pytest to use Pestify's custom reporter.
 
-    This hook wraps pytest's configuration to replace the default
+    This hook runs after pytest's own configuration to replace the default
     TerminalReporter with our PestifyTerminalReporter.
 
-    Uses hookwrapper=True to run around pytest's own configuration.
+    Uses trylast=True to run after pytest's terminal reporter is registered.
 
     Args:
         config: pytest configuration object
     """
-    # Let pytest do its initial configuration
-    yield
-
-    # Now replace the reporter if pestify is enabled
+    # Don't replace reporter if pestify is disabled
     if config.option.no_pestify:
         return
 
