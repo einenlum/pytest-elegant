@@ -27,6 +27,11 @@ python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
 
+# Pestify configuration options (all default to true)
+# pestify_show_context = true      # Show code context in failure output
+# pestify_group_by_file = true     # Group test results by file with PASS/FAIL headers
+# pestify_show_duration = true     # Show test duration for each test
+
 [tool.ruff]
 line-length = 88
 target-version = "py314"

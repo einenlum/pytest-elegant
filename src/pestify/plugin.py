@@ -27,6 +27,26 @@ def pytest_addoption(parser: Parser) -> None:
         help="Disable Pestify output formatting and use default pytest output",
     )
 
+    # Add configuration options (can also be set in pytest.ini/pyproject.toml)
+    parser.addini(
+        "pestify_show_context",
+        type="bool",
+        default=True,
+        help="Show code context in failure output (default: True)",
+    )
+    parser.addini(
+        "pestify_group_by_file",
+        type="bool",
+        default=True,
+        help="Group test results by file with PASS/FAIL headers (default: True)",
+    )
+    parser.addini(
+        "pestify_show_duration",
+        type="bool",
+        default=True,
+        help="Show test duration for each test (default: True)",
+    )
+
 
 def pytest_configure(config: Config) -> None:
     """Configure pytest to use Pestify's custom reporter.

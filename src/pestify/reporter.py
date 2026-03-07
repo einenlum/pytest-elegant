@@ -37,6 +37,11 @@ class PestifyTerminalReporter(TerminalReporter):
         self._total_skipped = 0
         self._total_duration = 0.0
 
+        # Read configuration options
+        self._show_context = config.getini("pestify_show_context")
+        self._group_by_file = config.getini("pestify_group_by_file")
+        self._show_duration = config.getini("pestify_show_duration")
+
     def write_sep(
         self,
         sep: str,
@@ -91,30 +96,40 @@ class PestifyTerminalReporter(TerminalReporter):
             file_path = nodeid
             test_name = nodeid
 
-        # Track file changes for grouping
-        if file_path != self._current_file:
-            # Print previous file's results if there was one
-            if self._current_file is not None:
-                self._print_file_results(self._current_file)
-
-            self._current_file = file_path
-            self._file_results[file_path] = []
-            self._file_has_failures[file_path] = False
-
-        # Track test result for this file
+        # Get test symbol
         symbol = self._get_symbol(report)
-        self._file_results[file_path].append((report, symbol))
 
         # Track statistics
         if report.passed:
             self._total_passed += 1
         elif report.failed:
             self._total_failed += 1
-            self._file_has_failures[file_path] = True
         elif report.skipped:
             self._total_skipped += 1
 
         self._total_duration += report.duration
+
+        # Handle grouping by file if enabled
+        if self._group_by_file:
+            # Track file changes for grouping
+            if file_path != self._current_file:
+                # Print previous file's results if there was one
+                if self._current_file is not None:
+                    self._print_file_results(self._current_file)
+
+                self._current_file = file_path
+                self._file_results[file_path] = []
+                self._file_has_failures[file_path] = False
+
+            # Track test result for this file
+            self._file_results[file_path].append((report, symbol))
+
+            # Track failures for file header
+            if report.failed:
+                self._file_has_failures[file_path] = True
+        else:
+            # Print results immediately without grouping
+            self._print_test_result(report, symbol)
 
         # Call parent to handle internal tracking
         super().pytest_runtest_logreport(report)
@@ -177,19 +192,22 @@ class PestifyTerminalReporter(TerminalReporter):
         else:
             test_name = report.nodeid
 
-        # Format duration
-        duration_str = self._format_duration(report.duration)
-
         # Build the result line
-        result_line = f"  {symbol} {test_name} {duration_str}"
+        result_line = f"  {symbol} {test_name}"
+
+        # Add duration if enabled
+        if self._show_duration:
+            duration_str = self._format_duration(report.duration)
+            result_line += f" {duration_str}"
 
         # Print with appropriate color
         if report.passed:
             self.write_line(result_line, green=True)
         elif report.failed:
             self.write_line(result_line, red=True)
-            # Show failure details immediately
-            self._print_failure_details(report)
+            # Show failure details immediately if context is enabled
+            if self._show_context:
+                self._print_failure_details(report)
         elif report.skipped:
             self.write_line(result_line, yellow=True)
 
@@ -304,8 +322,8 @@ class PestifyTerminalReporter(TerminalReporter):
             exitstatus: pytest exit status code
             config: pytest configuration object
         """
-        # Print results for the last file if any
-        if self._current_file is not None:
+        # Print results for the last file if grouping is enabled
+        if self._group_by_file and self._current_file is not None:
             self._print_file_results(self._current_file)
             self._current_file = None
 
