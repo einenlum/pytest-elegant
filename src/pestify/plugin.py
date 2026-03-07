@@ -4,6 +4,7 @@ This module provides the core pytest hooks that integrate Pestify's
 custom reporter into pytest's test execution flow.
 """
 
+import sys
 from typing import Any, Optional
 
 import pytest
@@ -48,33 +49,44 @@ def pytest_addoption(parser: Parser) -> None:
     )
 
 
-def pytest_configure(config: Config) -> None:
+@pytest.hookimpl(hookwrapper=True)
+def pytest_configure(config: Config) -> Any:
     """Configure pytest to use Pestify's custom reporter.
 
-    This hook swaps out pytest's default TerminalReporter with our
-    PestifyTerminalReporter unless --no-pestify is specified.
+    This hook wraps pytest's configuration to replace the default
+    TerminalReporter with our PestifyTerminalReporter.
+
+    Uses hookwrapper=True to run around pytest's own configuration.
 
     Args:
         config: pytest configuration object
     """
+    # Let pytest do its initial configuration
+    yield
+
+    # Now replace the reporter if pestify is enabled
     if config.option.no_pestify:
         return
 
-    # Only apply Pestify reporter for terminal output (not for other reporters)
-    if config.option.verbose >= 0 and not config.getoption("--collect-only"):
+    # Don't replace reporter if collecting only
+    if config.getoption("--collect-only", False):
+        return
+
+    # Replace the terminal reporter with ours
+    if config.option.verbose >= 0:
         # Import here to avoid circular dependencies
         from pestify.reporter import PestifyTerminalReporter
 
-        # Get the standard terminal reporter plugin
+        # Get the standard terminal reporter that pytest just registered
         standard_reporter = config.pluginmanager.get_plugin("terminalreporter")
 
-        if standard_reporter:
-            # Unregister the standard reporter
+        if standard_reporter and not isinstance(standard_reporter, PestifyTerminalReporter):
+            # Unregister pytest's terminal reporter
             config.pluginmanager.unregister(standard_reporter)
 
             # Create and register our custom reporter
-            pestify_reporter = PestifyTerminalReporter(config)
-            config.pluginmanager.register(pestify_reporter, "terminalreporter")
+            reporter = PestifyTerminalReporter(config, sys.stdout)
+            config.pluginmanager.register(reporter, "terminalreporter")
 
 
 def pytest_report_header(config: Config) -> list[str]:

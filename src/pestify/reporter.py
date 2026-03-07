@@ -29,13 +29,14 @@ class PestifyTerminalReporter(TerminalReporter):
     - Colored output (green/red/yellow)
     """
 
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config, file: Any = None) -> None:
         """Initialize the Pestify reporter.
 
         Args:
             config: pytest configuration object
+            file: optional file object to write to (defaults to sys.stdout)
         """
-        super().__init__(config)
+        super().__init__(config, file)
         self._current_file: Optional[str] = None
         self._file_results: dict[str, list[tuple[TestReport, str]]] = {}
         self._file_has_failures: dict[str, bool] = {}
@@ -79,6 +80,20 @@ class PestifyTerminalReporter(TerminalReporter):
             **markup: color/style markup options
         """
         # Suppress all separator lines for cleaner output
+        pass
+
+    def write_fspath_result(self, nodeid: str, res: Any, **markup: bool) -> None:
+        """Override to suppress compact progress output.
+
+        This prevents pytest from writing the compact progress line
+        (e.g., "test_file.py ✓✓✓") and lets us handle all output formatting.
+
+        Args:
+            nodeid: test node ID
+            res: test result
+            **markup: color/style markup options
+        """
+        # Suppress the compact progress output - we handle formatting ourselves
         pass
 
     def pytest_collection_finish(self, session: Any) -> None:
