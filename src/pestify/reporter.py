@@ -9,6 +9,8 @@ from typing import Any, Optional
 from _pytest.config import Config
 from _pytest.reports import TestReport
 from _pytest.terminal import TerminalReporter
+from rich.console import Console
+from rich.syntax import Syntax
 
 from pestify.utils import (
     extract_test_parts,
@@ -507,10 +509,11 @@ class PestifyTerminalReporter(TerminalReporter):
             return f"{minutes}m {seconds}s"
 
     def _print_code_context(self, file_path: str, failing_line: int, context_before: int = 4, context_after: int = 12) -> None:
-        """Print code context around a failing line (Pest style).
+        """Print code context around a failing line with syntax highlighting.
 
         Reads the source file and displays a few lines of context around the
-        failing line, with line numbers and a red arrow pointing to the failure.
+        failing line, with line numbers, syntax highlighting, and highlighting
+        of the specific failing line.
 
         Args:
             file_path: path to the source file
@@ -527,18 +530,33 @@ class PestifyTerminalReporter(TerminalReporter):
             start_line = max(1, failing_line - context_before)
             end_line = min(len(source_lines), failing_line + context_after)
 
+            # Get the code snippet
+            code_snippet = ''.join(source_lines[start_line - 1:end_line])
+
+            # Create syntax highlighted version using Rich
+            syntax = Syntax(
+                code_snippet,
+                "python",
+                theme="ansi_dark",
+                line_numbers=True,
+                start_line=start_line,
+                highlight_lines={failing_line},
+                indent_guides=False,
+                code_width=None,
+            )
+
             self.write_line("")
 
-            # Display code context with line numbers
-            for line_num in range(start_line, end_line + 1):
-                code_line = source_lines[line_num - 1].rstrip()  # Remove trailing whitespace/newlines
+            # Create a Rich console that writes to the same output stream
+            console = Console(
+                file=self._tw._file,
+                force_terminal=True,
+                width=self._terminal_width,
+                legacy_windows=False,
+            )
 
-                if line_num == failing_line:
-                    # Failing line - show with red arrow
-                    self.write_line(f"  \033[31m→\033[0m {line_num:4d}  {code_line}")
-                else:
-                    # Context line - show without arrow
-                    self.write_line(f"    {line_num:4d}  {code_line}")
+            # Print the syntax-highlighted code
+            console.print("  ", syntax, sep="")
 
         except (FileNotFoundError, IOError, IndexError):
             # If we can't read the file, just skip the context
