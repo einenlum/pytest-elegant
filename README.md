@@ -36,43 +36,29 @@ pytest
 
 That's it! No configuration needed.
 
-### Example Output
+### Successful Example Output
 
 **Before (standard pytest):**
-```
-=================== test session starts ===================
-platform linux -- Python 3.14.0, pytest-9.0.2, pluggy-1.6.0
-rootdir: /path/to/project
-collected 4 items
 
-tests/test_math.py ..                                [50%]
-tests/test_user.py .F                                [100%]
-
-======================== FAILURES =========================
-_____________ test_user_validation ____________
-    def test_user_validation():
->       assert user.is_valid()
-E       AssertionError: assert False
-...
-```
+![](assets/success-pytest.png)
 
 **After (with pytest-elegant):**
-```
-  PASS  tests/test_math.py
-  ✓ test_addition 0.01s
-  ✓ test_subtraction 0.01s
 
-  FAIL  tests/test_user.py
-  ✓ test_user_creation 0.05s
-  ⨯ test_user_validation 0.03s
-  ────────────────────────────────────────
-  AssertionError: assert False
-    File "tests/test_user.py", line 12, in test_user_validation
-  →   assert user.is_valid()
+![](assets/success-pytest-elegant.png)
 
-  Tests: 3 passed, 1 failed, 4 total
-  Duration: 0.10s
-```
+### Failure Example Output
+
+**Before (standard pytest):**
+
+![](assets/failure-pytest.png)
+
+**After (with pytest-elegant):**
+
+![](assets/failure-pytest-elegant.png)
+
+**After (with pytest-elegant with verbose mode):**
+
+![](assets/failure-pytest-elegant-verbose.png)
 
 ## Configuration
 
@@ -172,9 +158,6 @@ pytest-elegant is a pytest plugin that:
 ```bash
 # Run all tests
 pytest
-
-# Run with coverage
-pytest --cov=pytest_elegant --cov-report=term-missing
 
 # Run specific test file
 pytest tests/test_reporter.py
