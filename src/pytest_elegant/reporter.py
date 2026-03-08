@@ -21,7 +21,7 @@ from pytest_elegant.utils import (
 )
 
 
-class ElegantTerminalReporter(TerminalReporter):
+class ElegantTerminalReporter(TerminalReporter):  # type: ignore[misc]
     """Custom reporter that formats pytest output with elegant styling.
 
     This reporter provides:
@@ -117,8 +117,8 @@ class ElegantTerminalReporter(TerminalReporter):
             if not self._suppress_output:
                 original_line(s, **kwargs)
 
-        self._tw.write = wrapped_write
-        self._tw.line = wrapped_line
+        self._tw.write = wrapped_write  # type: ignore[method-assign,assignment]
+        self._tw.line = wrapped_line  # type: ignore[method-assign]
 
     def pytest_sessionstart(self, session: Any) -> None:
         """Suppress the pytest session start header.
@@ -135,7 +135,7 @@ class ElegantTerminalReporter(TerminalReporter):
         self._suppress_output = True
         super().pytest_sessionstart(session)
 
-    def write_line(self, line: str = "", **markup: bool) -> None:
+    def write_line(self, line: str | bytes = "", **markup: bool) -> None:
         """Override to suppress output when needed.
 
         Args:
@@ -694,7 +694,7 @@ class ElegantTerminalReporter(TerminalReporter):
 
         self.write_line("")
 
-    def pytest_terminal_summary(
+    def pytest_terminal_summary(  # type: ignore[override]
         self,
         terminalreporter: "TerminalReporter",
         exitstatus: int,
