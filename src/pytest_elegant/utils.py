@@ -1,6 +1,5 @@
 """Helper utility functions for pytest-elegant."""
 
-import os
 import shutil
 import sys
 from pathlib import Path

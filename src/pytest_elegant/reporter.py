@@ -248,20 +248,24 @@ class ElegantTerminalReporter(TerminalReporter):  # type: ignore[misc]
             This method maintains internal state to track file grouping and
             statistics. It updates total counts and duration for the final summary.
         """
-        # Only process the "call" phase (actual test execution)
+        # Only process the "call" phase (actual test execution) and setup phase skips
         if report.when != "call":
-            # Still need to handle setup/teardown failures
+            # Handle setup/teardown failures
             if report.failed and report.when == "setup":
                 super().pytest_runtest_logreport(report)
-            return
+                return
+            # Handle skips that happen during setup (e.g., @pytest.mark.skip)
+            if report.skipped and report.when == "setup":
+                pass  # Continue processing skipped tests
+            else:
+                return
 
         # Extract file path from nodeid (format: "tests/test_foo.py::test_bar")
         nodeid = report.nodeid
         if "::" in nodeid:
-            file_path, test_name = nodeid.split("::", 1)
+            file_path = nodeid.split("::", 1)[0]
         else:
             file_path = nodeid
-            test_name = nodeid
 
         # Get test symbol
         symbol = self._get_symbol(report)
@@ -272,12 +276,9 @@ class ElegantTerminalReporter(TerminalReporter):  # type: ignore[misc]
         elif report.failed:
             self._total_failed += 1
         elif report.skipped:
-            # Check if this is xfailed or xpassed
+            # Check if this is xfailed (expected to fail and did fail)
             if hasattr(report, "wasxfail"):
-                if report.skipped:
-                    self._total_xfailed += 1
-                else:
-                    self._total_skipped += 1
+                self._total_xfailed += 1
             else:
                 self._total_skipped += 1
 

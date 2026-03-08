@@ -20,6 +20,7 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
+norecursedirs = ["fixtures"]
 
 # pytest-elegant configuration options (all default to true)
 # elegant_show_context = true      # Show code context in failure output

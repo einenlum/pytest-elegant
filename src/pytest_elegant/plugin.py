@@ -10,7 +10,6 @@ from typing import Any, Optional
 import pytest
 from _pytest.config import Config
 from _pytest.config.argparsing import Parser
-from _pytest.nodes import Item
 from _pytest.reports import TestReport
 
 

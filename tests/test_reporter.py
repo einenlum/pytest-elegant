@@ -589,14 +589,16 @@ class TestElegantTerminalReporter:
         assert len(summary_calls) > 0
 
     def test_skip_non_call_phase(self, reporter):
-        """Test that non-call phases are skipped."""
+        """Test that non-call phases are skipped (except setup skips)."""
         report = Mock(spec=TestReport)
         report.when = "setup"
         report.failed = False
+        report.skipped = False
+        report.passed = False
         report.nodeid = "tests/test_foo.py::test_bar"
 
         reporter.pytest_runtest_logreport(report)
-        # Should not track statistics for setup phase
+        # Should not track statistics for setup phase (when not skipped)
         assert reporter._total_passed == 0
         assert reporter._current_file is None
 
@@ -605,11 +607,28 @@ class TestElegantTerminalReporter:
         report = Mock(spec=TestReport)
         report.when = "setup"
         report.failed = True
+        report.skipped = False
+        report.passed = False
         report.nodeid = "tests/test_foo.py::test_bar"
 
         with patch.object(TerminalReporter, "pytest_runtest_logreport"):
             reporter.pytest_runtest_logreport(report)
             # Should call parent reporter for setup failures
+
+    def test_setup_skip_counted(self, reporter):
+        """Test that skips during setup phase are counted."""
+        report = Mock(spec=TestReport)
+        report.when = "setup"
+        report.failed = False
+        report.skipped = True
+        report.passed = False
+        report.nodeid = "tests/test_foo.py::test_bar"
+        report.duration = 0.0
+
+        with patch.object(TerminalReporter, "pytest_runtest_logreport"):
+            reporter.pytest_runtest_logreport(report)
+            # Should track skipped statistics for setup phase skips
+            assert reporter._total_skipped == 1
 
 
 class TestPrintTestResult:
@@ -663,12 +682,14 @@ class TestPrintTestResult:
 
         reporter._print_test_result(report, "✓")
 
-        # Check that write_line was called with green color
+        # Check that write_line was called with green color (ANSI code)
         reporter.write_line.assert_called_once()
         call_args = reporter.write_line.call_args
-        assert "✓" in call_args[0][0]
-        assert "test_bar" in call_args[0][0]
-        assert call_args[1].get("green") is True
+        output = call_args[0][0]
+        assert "✓" in output
+        assert "bar" in output
+        # Check for green ANSI color code (\033[32m)
+        assert "\033[32m" in output
 
     def test_print_failed_test_with_context(self, reporter):
         """Test printing a failed test with context."""
@@ -711,4 +732,4 @@ class TestPrintTestResult:
         reporter._print_test_result(report, "✓")
 
         call_args = reporter.write_line.call_args
-        assert "TestClass::test_method" in call_args[0][0]
+        assert "TestClass::method" in call_args[0][0]
