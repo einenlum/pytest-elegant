@@ -185,6 +185,10 @@ Contributions welcome! Please:
 4. Ensure all tests pass
 5. Submit a pull request
 
+## Author
+
+Yann Rabiller ([@einenlum](https://github.com/Einenlum/)) | [blog](https://www.einenlum.com) | [From PHP to Python](https://fromphptopython.com)
+
 ## License
 
 MIT License - see LICENSE file for details
