@@ -94,6 +94,36 @@ class PestifyTerminalReporter(TerminalReporter):
         self._symbols = get_symbols()
         self._terminal_width = get_terminal_width()
 
+        # Flag to suppress output during session start header
+        self._suppress_output = False
+
+    def pytest_sessionstart(self, session: Any) -> None:
+        """Suppress the pytest session start header.
+
+        This prevents pytest from displaying the verbose header information
+        (platform, Python version, plugins, rootdir, etc.) for a cleaner
+        output matching Pest's minimal aesthetic.
+
+        Args:
+            session: pytest session object
+        """
+        # Suppress output during session start to hide header
+        self._suppress_output = True
+        super().pytest_sessionstart(session)
+        self._suppress_output = False
+
+    def write_line(self, line: str = "", **markup: bool) -> None:
+        """Override to suppress output when needed.
+
+        Args:
+            line: text to write
+            **markup: color/style markup options
+        """
+        # Suppress output during session start header
+        if self._suppress_output:
+            return
+        super().write_line(line, **markup)
+
     def write_sep(
         self,
         sep: str,
