@@ -1,6 +1,6 @@
 [project]
 name = "pytest-elegant"
-version = "0.1.0"
+version = "0.1.1"
 description = "A pytest plugin that provides elegant, beautiful test output"
 readme = "README.md"
 authors = [
@@ -11,9 +11,26 @@ dependencies = [
     "pytest>=7.0.0",
     "rich>=13.0.0",
 ]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: Pytest",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Quality Assurance",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3 :: Only",
+    "Operating System :: OS Independent",
+]
 
 [project.entry-points.pytest11]
 pytest_elegant = "pytest_elegant.plugin"
+
+[project.urls]
+Homepage = "https://github.com/einenlum/pytest-elegant"
+Repository = "https://github.com/einenlum/pytest-elegant"
+"Bug Tracker" = "https://github.com/einenlum/pytest-elegant/issues"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
