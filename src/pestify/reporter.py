@@ -506,6 +506,44 @@ class PestifyTerminalReporter(TerminalReporter):
             seconds = int(duration % 60)
             return f"{minutes}m {seconds}s"
 
+    def _print_code_context(self, file_path: str, failing_line: int, context_before: int = 4, context_after: int = 12) -> None:
+        """Print code context around a failing line (Pest style).
+
+        Reads the source file and displays a few lines of context around the
+        failing line, with line numbers and a red arrow pointing to the failure.
+
+        Args:
+            file_path: path to the source file
+            failing_line: line number that failed (1-indexed)
+            context_before: number of context lines to show before the failure
+            context_after: number of context lines to show after the failure
+        """
+        try:
+            # Read the source file
+            with open(file_path, 'r', encoding='utf-8') as f:
+                source_lines = f.readlines()
+
+            # Calculate range of lines to display (1-indexed)
+            start_line = max(1, failing_line - context_before)
+            end_line = min(len(source_lines), failing_line + context_after)
+
+            self.write_line("")
+
+            # Display code context with line numbers
+            for line_num in range(start_line, end_line + 1):
+                code_line = source_lines[line_num - 1].rstrip()  # Remove trailing whitespace/newlines
+
+                if line_num == failing_line:
+                    # Failing line - show with red arrow
+                    self.write_line(f"  \033[31m→\033[0m {line_num:4d}  {code_line}")
+                else:
+                    # Context line - show without arrow
+                    self.write_line(f"    {line_num:4d}  {code_line}")
+
+        except (FileNotFoundError, IOError, IndexError):
+            # If we can't read the file, just skip the context
+            pass
+
     def _print_failure_details(self, report: TestReport) -> None:
         """Print detailed failure information with code context.
 
@@ -544,39 +582,97 @@ class PestifyTerminalReporter(TerminalReporter):
             self.write_line("")
             return
 
-        # Normal mode: show relevant parts of the traceback
+        # Normal mode: show clean Pest-style error
         longrepr_str = str(report.longrepr)
         lines = longrepr_str.split("\n")
 
-        # Show the complete error message in a cleaner format
-        # Pytest's longrepr contains the full traceback and error details
-        # We'll display it with proper indentation, focusing on 'E ' lines (error details)
-        shown_lines = []
-        for line in lines:
+        # Extract the main error message and location
+        # Skip verbose diff output, "Differing items:", "use `-vv`" messages, etc.
+        error_message = None
+        error_type = None
+        file_location = None
+        file_path = None
+        line_number = None
+
+        for i, line in enumerate(lines):
             stripped = line.strip()
 
-            # Skip empty lines
-            if not stripped:
-                continue
+            # Extract file location (lines like "tests/test_foo.py:10: AssertionError" or "tests/test_foo.py:10: TypeError")
+            if ":" in stripped and ".py:" in stripped and (
+                "Error" in stripped or "Exception" in stripped
+            ):
+                # Find the error type (AssertionError, TypeError, etc.)
+                for err_type in ["AssertionError", "TypeError", "ValueError", "IndexError", "ZeroDivisionError", "KeyError", "AttributeError"]:
+                    if err_type in stripped:
+                        error_type = err_type
+                        parts = stripped.split(err_type)[0].strip()
+                        if ".py:" in parts:
+                            # Extract path and line number
+                            file_part = parts.rstrip(":")
+                            if ":" in file_part:
+                                try:
+                                    # Split by : to get path and line number
+                                    path_and_line = file_part.split(":")
+                                    if len(path_and_line) >= 2:
+                                        file_path = path_and_line[0] + ".py" if not path_and_line[0].endswith(".py") else path_and_line[0]
+                                        # Handle paths like "tests/test_foo.py:10" correctly
+                                        if file_part.count(":") == 1:
+                                            parts_split = file_part.split(":")
+                                            file_path = parts_split[0]
+                                            line_number = int(parts_split[1])
+                                        else:
+                                            # Multiple colons, take last as line number
+                                            line_number = int(path_and_line[-1])
+                                            file_path = ":".join(path_and_line[:-1])
+                                        file_location = f"{file_path}:{line_number}"
+                                except (ValueError, IndexError):
+                                    pass
+                        break
 
-            # Lines starting with 'E ' are pytest's error messages and assertion details
-            if stripped.startswith("E "):
-                # Remove the 'E ' prefix
-                error_line = stripped[2:].strip()
-                # Only show non-empty content (skip lines that are just "E")
-                if error_line:
-                    shown_lines.append(error_line)
+            # Get the first meaningful error message (E line with error info)
+            if error_message is None and stripped.startswith("E "):
+                error_content = stripped[2:].strip()
 
-        # If we found error lines, display them
-        if shown_lines:
-            for error_line in shown_lines:
-                self.write_line(f"  {error_line}", red=True)
-        else:
-            # Fallback: show the entire longrepr if no 'E ' lines found
-            # (this handles edge cases where the format is unexpected)
-            for line in lines:
-                if line.strip():
-                    self.write_line(f"  {line.strip()}", red=True)
+                # For any Error type with a message
+                if any(err in error_content for err in ["Error:", "Exception:"]):
+                    # Extract the error message after the colon
+                    if ": " in error_content:
+                        error_message = error_content.split(": ", 1)[1]
+                # For AssertionError with custom message
+                elif "AssertionError: " in error_content:
+                    error_message = error_content.split("AssertionError: ", 1)[1]
+                # Skip verbose assertion rewrites with diffs
+                elif error_content.startswith("assert ") and not ('{' in error_content and '...' in error_content):
+                    error_message = error_content
+
+        # If we still don't have an error message, create one from error type
+        if error_message is None and error_type:
+            if error_type == "AssertionError":
+                error_message = "Assertion failed."
+            elif error_type == "TypeError":
+                error_message = "Type error occurred."
+            elif error_type == "IndexError":
+                error_message = "Index out of range."
+            elif error_type == "ZeroDivisionError":
+                error_message = "Division by zero."
+            else:
+                error_message = f"{error_type} occurred."
+
+        # Display the error in Pest style
+        if error_message:
+            # Clean up assertion messages with verbose comparisons
+            if "assert" in error_message.lower() and "==" in error_message:
+                error_message = "Failed asserting that values are equal."
+
+            self.write_line(f"  {error_message}", red=True)
+
+        # Show file location if available
+        if file_location:
+            self.write_line(f"\n  at {file_location}")
+
+        # Extract and display code context from the actual file (Pest style)
+        if file_path and line_number:
+            self._print_code_context(file_path, line_number)
 
         self.write_line("")
 
