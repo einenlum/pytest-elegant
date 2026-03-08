@@ -1,4 +1,4 @@
-"""Helper utility functions for Pestify."""
+"""Helper utility functions for pytest-elegant."""
 
 import os
 import shutil
@@ -304,7 +304,7 @@ def extract_test_parts(nodeid: str) -> tuple[str, str, str | None, str | None]:
 
 def format_test_name(test_name: str) -> str:
     """
-    Format a test function name into human-readable format (Pest style).
+    Format a test function name into human-readable format.
 
     Removes 'test_' prefix and converts underscores to spaces.
 

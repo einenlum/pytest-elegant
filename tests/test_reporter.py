@@ -1,4 +1,4 @@
-"""Unit tests for PestifyTerminalReporter and utility functions."""
+"""Unit tests for ElegantTerminalReporter and utility functions."""
 
 from unittest.mock import MagicMock, Mock, patch
 
@@ -7,8 +7,8 @@ from _pytest.config import Config
 from _pytest.reports import TestReport
 from _pytest.terminal import TerminalReporter
 
-from pestify.reporter import PestifyTerminalReporter
-from pestify.utils import (
+from pytest_elegant.reporter import ElegantTerminalReporter
+from pytest_elegant.utils import (
     extract_test_parts,
     format_duration,
     get_file_path_from_nodeid,
@@ -181,7 +181,7 @@ class TestGetSymbols:
 
     def test_get_symbols_unicode(self):
         """Test getting Unicode symbols."""
-        with patch("pestify.utils.supports_unicode", return_value=True):
+        with patch("pytest_elegant.utils.supports_unicode", return_value=True):
             symbols = get_symbols(use_unicode=True)
             assert symbols["passed"] == "✓"
             assert symbols["failed"] == "⨯"
@@ -299,8 +299,8 @@ class TestExtractTestParts:
         assert parameters is None
 
 
-class TestPestifyTerminalReporter:
-    """Tests for PestifyTerminalReporter class."""
+class TestElegantTerminalReporter:
+    """Tests for ElegantTerminalReporter class."""
 
     @pytest.fixture
     def mock_config(self):
@@ -309,9 +309,9 @@ class TestPestifyTerminalReporter:
 
         config = Mock(spec=Config)
         config.getini = Mock(side_effect=lambda x: {
-            "pestify_show_context": True,
-            "pestify_group_by_file": True,
-            "pestify_show_duration": True,
+            "elegant_show_context": True,
+            "elegant_group_by_file": True,
+            "elegant_show_duration": True,
         }.get(x, True))
         config.option = Mock()
         config.option.verbose = 0
@@ -340,8 +340,8 @@ class TestPestifyTerminalReporter:
 
     @pytest.fixture
     def reporter(self, mock_config):
-        """Create a PestifyTerminalReporter instance."""
-        with patch("pestify.reporter.get_symbols") as mock_symbols:
+        """Create an ElegantTerminalReporter instance."""
+        with patch("pytest_elegant.reporter.get_symbols") as mock_symbols:
             mock_symbols.return_value = {
                 "passed": "✓",
                 "failed": "⨯",
@@ -350,7 +350,7 @@ class TestPestifyTerminalReporter:
                 "xpassed": "X",
                 "error": "E",
             }
-            reporter = PestifyTerminalReporter(mock_config)
+            reporter = ElegantTerminalReporter(mock_config)
             reporter.write_line = Mock()
             return reporter
 
@@ -639,13 +639,13 @@ class TestPrintTestResult:
         config.pluginmanager = Mock()
         config.pluginmanager.get_plugin = Mock(return_value=None)
 
-        with patch("pestify.reporter.get_symbols") as mock_symbols:
+        with patch("pytest_elegant.reporter.get_symbols") as mock_symbols:
             mock_symbols.return_value = {
                 "passed": "✓",
                 "failed": "⨯",
                 "skipped": "-",
             }
-            reporter = PestifyTerminalReporter(config)
+            reporter = ElegantTerminalReporter(config)
             reporter.write_line = Mock()
             reporter._show_duration = True
             reporter._show_context = True

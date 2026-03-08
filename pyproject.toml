@@ -1,7 +1,7 @@
 [project]
-name = "pestify"
+name = "pytest-elegant"
 version = "0.1.0"
-description = "A pytest plugin that transforms test output to match Pest PHP's beautiful aesthetic"
+description = "A pytest plugin that provides elegant, beautiful test output"
 readme = "README.md"
 authors = [
     { name = "Einenlum", email = "contact@einenlum.com" }
@@ -12,15 +12,8 @@ dependencies = [
     "rich>=13.0.0",
 ]
 
-[project.optional-dependencies]
-dev = [
-    "pytest-cov>=4.0.0",
-    "mypy>=1.0.0",
-    "ruff>=0.1.0",
-]
-
 [project.entry-points.pytest11]
-pestify = "pestify.plugin"
+pytest_elegant = "pytest_elegant.plugin"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -28,10 +21,10 @@ python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
 
-# Pestify configuration options (all default to true)
-# pestify_show_context = true      # Show code context in failure output
-# pestify_group_by_file = true     # Group test results by file with PASS/FAIL headers
-# pestify_show_duration = true     # Show test duration for each test
+# pytest-elegant configuration options (all default to true)
+# elegant_show_context = true      # Show code context in failure output
+# elegant_group_by_file = true     # Group test results by file with PASS/FAIL headers
+# elegant_show_duration = true     # Show test duration for each test
 
 [tool.ruff]
 line-length = 88
@@ -46,3 +39,9 @@ disallow_untyped_defs = true
 [build-system]
 requires = ["uv_build>=0.9.7,<0.10.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1",
+    "ruff>=0.15.5",
+]

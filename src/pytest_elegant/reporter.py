@@ -1,7 +1,7 @@
-"""Custom TerminalReporter for Pest-style output.
+"""Custom TerminalReporter for elegant output.
 
-This module provides the PestifyTerminalReporter class that extends pytest's
-TerminalReporter to produce clean, minimal output matching Pest PHP's aesthetic.
+This module provides the ElegantTerminalReporter class that extends pytest's
+TerminalReporter to produce clean, minimal, elegant output.
 """
 
 from typing import Any, Optional
@@ -12,7 +12,7 @@ from _pytest.terminal import TerminalReporter
 from rich.console import Console
 from rich.syntax import Syntax
 
-from pestify.utils import (
+from pytest_elegant.utils import (
     extract_test_parts,
     format_test_name,
     get_symbols,
@@ -21,8 +21,8 @@ from pestify.utils import (
 )
 
 
-class PestifyTerminalReporter(TerminalReporter):
-    """Custom reporter that formats pytest output in Pest style.
+class ElegantTerminalReporter(TerminalReporter):
+    """Custom reporter that formats pytest output with elegant styling.
 
     This reporter provides:
     - Minimal, clean output with ✓/✗ symbols
@@ -34,18 +34,18 @@ class PestifyTerminalReporter(TerminalReporter):
     The reporter extends pytest's built-in TerminalReporter to completely
     customize the output format. It suppresses pytest's verbose headers,
     groups tests by file, and displays results in a clean, minimal format
-    inspired by Pest PHP's test output.
+    with elegant aesthetics.
 
     Configuration options (set in pytest.ini or pyproject.toml):
-        - pestify_show_context: Show code context in failure output (default: True)
-        - pestify_group_by_file: Group tests by file with headers (default: True)
-        - pestify_show_duration: Show test duration (default: True)
+        - elegant_show_context: Show code context in failure output (default: True)
+        - elegant_group_by_file: Group tests by file with headers (default: True)
+        - elegant_show_duration: Show test duration (default: True)
 
     Examples:
         The reporter is automatically registered via the pytest plugin system.
-        To disable it, use the --no-pestify flag:
+        To disable it, use the --no-elegant flag:
 
-        >>> pytest --no-pestify  # doctest: +SKIP
+        >>> pytest --no-elegant  # doctest: +SKIP
 
         Example output:
           PASS  tests/test_math.py
@@ -57,7 +57,7 @@ class PestifyTerminalReporter(TerminalReporter):
     """
 
     def __init__(self, config: Config, file: Any = None) -> None:
-        """Initialize the Pestify reporter.
+        """Initialize the elegant reporter.
 
         Sets up the reporter with configuration options, initializes tracking
         variables for test results and file grouping, and detects terminal
@@ -85,9 +85,9 @@ class PestifyTerminalReporter(TerminalReporter):
         self._total_duration = 0.0
 
         # Read configuration options
-        self._show_context = config.getini("pestify_show_context")
-        self._group_by_file = config.getini("pestify_group_by_file")
-        self._show_duration = config.getini("pestify_show_duration")
+        self._show_context = config.getini("elegant_show_context")
+        self._group_by_file = config.getini("elegant_group_by_file")
+        self._show_duration = config.getini("elegant_show_duration")
 
         # Get verbosity level for verbose mode support
         # 0 = normal, 1 = -v, 2+ = -vv or more
@@ -125,7 +125,7 @@ class PestifyTerminalReporter(TerminalReporter):
 
         This prevents pytest from displaying the verbose header information
         (platform, Python version, plugins, rootdir, etc.) for a cleaner
-        output matching Pest's minimal aesthetic.
+        output with minimal aesthetic.
 
         Args:
             session: pytest session object
@@ -169,7 +169,7 @@ class PestifyTerminalReporter(TerminalReporter):
     ) -> None:
         """Override to suppress separator lines.
 
-        Pest-style output doesn't use separator lines like pytest's
+        Elegant output doesn't use separator lines like pytest's
         "=== test session starts ===" headers.
 
         Args:
@@ -228,7 +228,7 @@ class PestifyTerminalReporter(TerminalReporter):
     def pytest_runtest_logreport(self, report: TestReport) -> None:
         """Process and format test results as they come in.
 
-        This is the main hook method that formats each test result in Pest style.
+        This is the main hook method that formats each test result elegantly.
         It groups tests by file and displays them with ✓/✗ symbols and durations.
 
         The method is called multiple times per test (setup, call, teardown phases)
@@ -380,7 +380,7 @@ class PestifyTerminalReporter(TerminalReporter):
         display_path = file_path
         if self._verbosity == 0 and len(file_path) > 60:
             # Only truncate in non-verbose mode
-            from pestify.utils import truncate_path
+            from pytest_elegant.utils import truncate_path
             display_path = truncate_path(file_path, 60)
 
         # Print file header with PASS/FAIL status
@@ -676,7 +676,7 @@ class PestifyTerminalReporter(TerminalReporter):
             else:
                 error_message = f"{error_type} occurred."
 
-        # Display the error in Pest style
+        # Display the error with elegant formatting
         if error_message:
             # Clean up assertion messages with verbose comparisons
             if "assert" in error_message.lower() and "==" in error_message:
@@ -688,7 +688,7 @@ class PestifyTerminalReporter(TerminalReporter):
         if file_location:
             self.write_line(f"\n  at {file_location}")
 
-        # Extract and display code context from the actual file (Pest style)
+        # Extract and display code context from the actual file
         if file_path and line_number:
             self._print_code_context(file_path, line_number)
 

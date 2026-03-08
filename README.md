@@ -1,6 +1,6 @@
-# Pestify
+# pytest-elegant
 
-A pytest plugin that transforms test output to match [Pest PHP](https://pestphp.com/)'s beautiful aesthetic.
+A pytest plugin that provides elegant, beautiful test output inspired by [Pest PHP](https://pestphp.com/)'s aesthetic.
 
 ## Features
 
@@ -17,18 +17,18 @@ A pytest plugin that transforms test output to match [Pest PHP](https://pestphp.
 ### Using uv (recommended)
 
 ```bash
-uv add --dev pestify
+uv add --dev pytest-elegant
 ```
 
 ### Using pip
 
 ```bash
-pip install pestify
+pip install pytest-elegant
 ```
 
 ## Usage
 
-Once installed, pestify automatically transforms your pytest output. Just run:
+Once installed, pytest-elegant automatically transforms your pytest output. Just run:
 
 ```bash
 pytest
@@ -56,7 +56,7 @@ E       AssertionError: assert False
 ...
 ```
 
-**After (with pestify):**
+**After (with pytest-elegant):**
 ```
   PASS  tests/test_math.py
   ✓ test_addition 0.01s
@@ -76,37 +76,37 @@ E       AssertionError: assert False
 
 ## Configuration
 
-Pestify works out of the box, but you can customize it via `pytest.ini` or `pyproject.toml`.
+pytest-elegant works out of the box, but you can customize it via `pytest.ini` or `pyproject.toml`.
 
 ### pyproject.toml
 
 ```toml
 [tool.pytest.ini_options]
-pestify_show_context = true      # Show code context in failure output (default: true)
-pestify_group_by_file = true     # Group test results by file (default: true)
-pestify_show_duration = true     # Show test duration for each test (default: true)
+elegant_show_context = true      # Show code context in failure output (default: true)
+elegant_group_by_file = true     # Group test results by file (default: true)
+elegant_show_duration = true     # Show test duration for each test (default: true)
 ```
 
 ### pytest.ini
 
 ```ini
 [pytest]
-pestify_show_context = true
-pestify_group_by_file = true
-pestify_show_duration = true
+elegant_show_context = true
+elegant_group_by_file = true
+elegant_show_duration = true
 ```
 
-## Disabling Pestify
+## Disabling pytest-elegant
 
-If you need to temporarily disable pestify and see standard pytest output:
+If you need to temporarily disable pytest-elegant and see standard pytest output:
 
 ```bash
-pytest --no-pestify
+pytest --no-elegant
 ```
 
 ## Verbose Mode
 
-Pestify respects pytest's verbosity flags:
+pytest-elegant respects pytest's verbosity flags:
 
 ```bash
 pytest -v      # More details (full file paths, more context)
@@ -117,7 +117,7 @@ pytest -vv     # Maximum details (full stack traces)
 
 ### Parametrized Tests
 
-Pestify beautifully formats parametrized tests, showing each parameter set:
+pytest-elegant beautifully formats parametrized tests, showing each parameter set:
 
 ```
   ✓ test_math[1-2-3] 0.01s
@@ -147,7 +147,7 @@ Different test outcomes have distinct symbols:
 
 ### Unicode Support
 
-If your terminal doesn't support ✓/✗ symbols, pestify automatically falls back to ASCII alternatives (`PASS`/`FAIL`).
+If your terminal doesn't support ✓/✗ symbols, pytest-elegant automatically falls back to ASCII alternatives (`PASS`/`FAIL`).
 
 ## Compatibility
 
@@ -158,11 +158,11 @@ If your terminal doesn't support ✓/✗ symbols, pestify automatically falls ba
 
 ## How It Works
 
-Pestify is a pytest plugin that:
+pytest-elegant is a pytest plugin that:
 
 1. Registers via the `pytest11` entry point
 2. Replaces pytest's default `TerminalReporter` with a custom one
-3. Customizes output formatting hooks to match Pest's aesthetic
+3. Customizes output formatting hooks to provide elegant, minimal output
 4. Uses pytest's built-in color support (no extra dependencies)
 
 ## Development
@@ -174,7 +174,7 @@ Pestify is a pytest plugin that:
 pytest
 
 # Run with coverage
-pytest --cov=pestify --cov-report=term-missing
+pytest --cov=pytest_elegant --cov-report=term-missing
 
 # Run specific test file
 pytest tests/test_reporter.py
@@ -183,13 +183,13 @@ pytest tests/test_reporter.py
 ### Type Checking
 
 ```bash
-mypy src/pestify
+mypy src/pytest_elegant
 ```
 
 ### Linting
 
 ```bash
-ruff check src/pestify
+ruff check src/pytest_elegant
 ```
 
 ## Contributing
@@ -208,14 +208,4 @@ MIT License - see LICENSE file for details
 
 ## Credits
 
-Inspired by [Pest PHP](https://pestphp.com/) by Nuno Maduro and contributors.
-
-## Changelog
-
-### 0.1.0 (2025)
-
-- Initial release
-- Core features: file grouping, colored output, duration display
-- Configuration options
-- Full pytest integration
-- Comprehensive test coverage
+Heavily inspired by [Pest PHP](https://pestphp.com/) by Nuno Maduro and contributors.

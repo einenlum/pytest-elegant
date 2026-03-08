@@ -1,4 +1,4 @@
-"""Test configuration for Pestify tests.
+"""Test configuration for pytest-elegant tests.
 
 This file enables pytest features needed for plugin testing.
 """

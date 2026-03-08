@@ -1,7 +1,7 @@
-"""Integration tests for Pestify pytest plugin.
+"""Integration tests for pytest-elegant plugin.
 
 Uses pytest's pytester fixture to create isolated test environments
-and verify that Pestify produces the correct output format.
+and verify that pytest-elegant produces the correct output format.
 """
 
 import re
@@ -12,7 +12,7 @@ from _pytest.pytester import Pytester
 
 
 class TestBasicOutput:
-    """Test basic Pestify output formatting."""
+    """Test basic elegant output formatting."""
 
     def test_passing_tests(self, pytester: Pytester) -> None:
         """Test that passing tests display with ✓ symbol."""
@@ -27,7 +27,7 @@ class TestBasicOutput:
             """
         )
 
-        # Run pytest with pestify enabled (default)
+        # Run pytest with elegant output enabled (default)
         result = pytester.runpytest()
 
         # Check exit code
@@ -167,11 +167,11 @@ class TestFileGrouping:
         assert "test_with_fail.py" in output
 
 
-class TestNoTestifyFlag:
-    """Test the --no-pestify command-line flag."""
+class TestNoElegantFlag:
+    """Test the --no-elegant command-line flag."""
 
-    def test_disable_pestify(self, pytester: Pytester) -> None:
-        """Test that --no-pestify disables Pestify formatting."""
+    def test_disable_elegant(self, pytester: Pytester) -> None:
+        """Test that --no-elegant disables elegant formatting."""
         pytester.makepyfile(
             test_normal="""
             def test_something():
@@ -179,16 +179,16 @@ class TestNoTestifyFlag:
             """
         )
 
-        # Run with --no-pestify flag
-        result = pytester.runpytest("--no-pestify", "-v")
+        # Run with --no-elegant flag
+        result = pytester.runpytest("--no-elegant", "-v")
 
         output = "\n".join(result.outlines)
 
-        # Should not see Pestify's PASS/FAIL headers
+        # Should not see elegant PASS/FAIL headers
         # Standard pytest output should show PASSED in a different format
         assert "PASSED" in output or "passed" in output
 
-        # Pestify-specific formatting should be absent
+        # Elegant-specific formatting should be absent
         # (Check for pytest's default session header)
         assert "test session starts" in output or "test_normal.py" in output
 
@@ -328,7 +328,7 @@ class TestConfigurationOptions:
         pytester.makeini(
             """
             [pytest]
-            pestify_show_duration = false
+            elegant_show_duration = false
             """
         )
 
@@ -351,7 +351,7 @@ class TestConfigurationOptions:
         pytester.makeini(
             """
             [pytest]
-            pestify_group_by_file = false
+            elegant_group_by_file = false
             """
         )
 
@@ -626,5 +626,5 @@ class TestIntegrationWithPytest:
 
         # Should not run tests, just collect
         output = "\n".join(result.outlines)
-        # Pestify should not interfere with collection
+        # pytest-elegant should not interfere with collection
         assert result.ret == 0

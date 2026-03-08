@@ -1,7 +1,7 @@
-"""Pestify: Pytest plugin for Pest-style output.
+"""pytest-elegant: Pytest plugin for elegant output.
 
-Pestify transforms pytest's test output to match Pest PHP's beautiful aesthetic,
-providing minimal, clean output with ✓/✗ symbols, file grouping, and colored results.
+pytest-elegant transforms pytest's test output to provide elegant, beautiful formatting
+with minimal, clean output using ✓/✗ symbols, file grouping, and colored results.
 
 Features:
     - Clean, minimal output with ✓/✗ symbols instead of dots/F/E
@@ -13,22 +13,22 @@ Features:
     - No changes to test code required
 
 Installation:
-    pip install pestify
+    pip install pytest-elegant
 
 Usage:
-    Simply install the plugin and run pytest normally. Pestify will automatically
-    format the output. To disable, use the --no-pestify flag:
+    Simply install the plugin and run pytest normally. pytest-elegant will automatically
+    format the output. To disable, use the --no-elegant flag:
 
-    pytest                # Pest-style output (default)
-    pytest --no-pestify   # Standard pytest output
+    pytest                # Elegant output (default)
+    pytest --no-elegant   # Standard pytest output
 
 Configuration:
     Options can be set in pytest.ini or pyproject.toml:
 
     [tool.pytest.ini_options]
-    pestify_show_context = true      # Show code context in failures
-    pestify_group_by_file = true     # Group tests by file
-    pestify_show_duration = true     # Show test durations
+    elegant_show_context = true      # Show code context in failures
+    elegant_group_by_file = true     # Group tests by file
+    elegant_show_duration = true     # Show test durations
 
 Example Output:
     PASS  tests/test_math.py
@@ -47,12 +47,12 @@ Example Output:
     Duration: 0.10s
 
 Modules:
-    plugin: Pytest hook implementations for integrating Pestify
-    reporter: PestifyTerminalReporter class for formatting output
+    plugin: Pytest hook implementations for integrating pytest-elegant
+    reporter: ElegantTerminalReporter class for formatting output
     utils: Helper functions for formatting and terminal operations
 
 Classes:
-    PestifyTerminalReporter: Custom terminal reporter for Pest-style output
+    ElegantTerminalReporter: Custom terminal reporter for elegant output
 
 Functions:
     pytest_configure: Hook to register the custom reporter
@@ -61,12 +61,12 @@ Functions:
 
 __version__ = "0.1.0"
 
-from pestify.reporter import PestifyTerminalReporter
-from pestify.plugin import pytest_configure, pytest_report_teststatus
+from pytest_elegant.reporter import ElegantTerminalReporter
+from pytest_elegant.plugin import pytest_configure, pytest_report_teststatus
 
 __all__ = [
     "__version__",
-    "PestifyTerminalReporter",
+    "ElegantTerminalReporter",
     "pytest_configure",
     "pytest_report_teststatus",
 ]
