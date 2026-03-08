@@ -97,6 +97,26 @@ class PestifyTerminalReporter(TerminalReporter):
         # Flag to suppress output during session start header
         self._suppress_output = False
 
+        # Wrap the terminal writer to intercept writes
+        self._original_tw = self._tw
+        self._wrap_terminal_writer()
+
+    def _wrap_terminal_writer(self) -> None:
+        """Wrap the terminal writer to intercept all writes."""
+        original_write = self._tw.write
+        original_line = self._tw.line
+
+        def wrapped_write(s: str, **kwargs: Any) -> None:
+            if not self._suppress_output:
+                original_write(s, **kwargs)
+
+        def wrapped_line(s: str = "", **kwargs: Any) -> None:
+            if not self._suppress_output:
+                original_line(s, **kwargs)
+
+        self._tw.write = wrapped_write
+        self._tw.line = wrapped_line
+
     def pytest_sessionstart(self, session: Any) -> None:
         """Suppress the pytest session start header.
 
@@ -108,9 +128,9 @@ class PestifyTerminalReporter(TerminalReporter):
             session: pytest session object
         """
         # Suppress output during session start to hide header
+        # Keep it suppressed through collection phase
         self._suppress_output = True
         super().pytest_sessionstart(session)
-        self._suppress_output = False
 
     def write_line(self, line: str = "", **markup: bool) -> None:
         """Override to suppress output when needed.
@@ -119,10 +139,23 @@ class PestifyTerminalReporter(TerminalReporter):
             line: text to write
             **markup: color/style markup options
         """
-        # Suppress output during session start header
+        # Suppress output during session start header and collection
         if self._suppress_output:
             return
         super().write_line(line, **markup)
+
+    def write(self, content: str, *, flush: bool = False, **markup: bool) -> None:
+        """Override to suppress output when needed.
+
+        Args:
+            content: text to write
+            flush: whether to flush output
+            **markup: color/style markup options
+        """
+        # Suppress output during session start header and collection
+        if self._suppress_output:
+            return
+        super().write(content, flush=flush, **markup)
 
     def write_sep(
         self,
@@ -159,6 +192,26 @@ class PestifyTerminalReporter(TerminalReporter):
         # Suppress the compact progress output - we handle formatting ourselves
         pass
 
+    def pytest_runtest_logstart(
+        self, nodeid: str, location: tuple[str, int | None, str]
+    ) -> None:
+        """Override to suppress test start logging.
+
+        Args:
+            nodeid: test node ID
+            location: test location (file, line, name)
+        """
+        # Suppress the test start log - we handle formatting ourselves
+        pass
+
+    def _write_progress_information_filling_space(self) -> None:
+        """Override to suppress the progress indicator [X%].
+
+        This prevents pytest from writing the "[100%]" progress indicator.
+        """
+        # Suppress progress percentage - we handle formatting ourselves
+        pass
+
     def pytest_collection_finish(self, session: Any) -> None:
         """Suppress the 'collected X items' message.
 
@@ -166,7 +219,8 @@ class PestifyTerminalReporter(TerminalReporter):
             session: pytest session object
         """
         # Don't print "collected X items" - we want minimal output
-        pass
+        # Re-enable output after collection (was suppressed since sessionstart)
+        self._suppress_output = False
 
     def pytest_runtest_logreport(self, report: TestReport) -> None:
         """Process and format test results as they come in.
@@ -252,8 +306,11 @@ class PestifyTerminalReporter(TerminalReporter):
             # Print results immediately without grouping
             self._print_test_result(report, symbol)
 
-        # Call parent to handle internal tracking
+        # Call parent to handle internal tracking, but suppress its output
+        old_suppress = self._suppress_output
+        self._suppress_output = True
         super().pytest_runtest_logreport(report)
+        self._suppress_output = old_suppress
 
     def _get_symbol(self, report: TestReport) -> str:
         """Get the appropriate symbol for a test result.
