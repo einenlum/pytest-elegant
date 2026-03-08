@@ -12,6 +12,7 @@ from _pytest.terminal import TerminalReporter
 
 from pestify.utils import (
     extract_test_parts,
+    format_test_name,
     get_symbols,
     get_terminal_width,
     truncate_test_name,
@@ -383,9 +384,13 @@ class PestifyTerminalReporter(TerminalReporter):
         # Print file header with PASS/FAIL status
         has_failures = self._file_has_failures.get(file_path, False)
         if has_failures:
-            self.write_line(f"\n  FAIL  {display_path}", red=True, bold=True)
+            # Red badge with white text for FAIL
+            badge = "\033[41m\033[97m FAIL \033[0m"
+            self.write_line(f"\n  {badge}  {display_path}", bold=True)
         else:
-            self.write_line(f"\n  PASS  {display_path}", green=True, bold=True)
+            # Green badge with dark text for PASS (matching Pest style)
+            badge = "\033[42m\033[30m PASS \033[0m"
+            self.write_line(f"\n  {badge}  {display_path}", bold=True)
 
         # Print each test result
         for report, symbol in results:
@@ -417,12 +422,15 @@ class PestifyTerminalReporter(TerminalReporter):
         # Extract test parts (file, name, class, parameters)
         file_path, test_name, class_name, parameters = extract_test_parts(report.nodeid)
 
+        # Format test name in Pest style (remove test_ prefix, replace _ with spaces)
+        formatted_test_name = format_test_name(test_name)
+
         # Build display name
-        display_name = test_name
+        display_name = formatted_test_name
 
         # Add class name if present (for test classes)
         if class_name:
-            display_name = f"{class_name}::{test_name}"
+            display_name = f"{class_name}::{formatted_test_name}"
 
         # Add parameters if present (for parametrized tests)
         if parameters:
@@ -439,32 +447,42 @@ class PestifyTerminalReporter(TerminalReporter):
             if len(display_name) > max_name_length:
                 display_name = truncate_test_name(display_name, max_name_length)
 
-        # Build the result line
-        result_line = f"  {symbol} {display_name}"
+        # Color only the symbol (Pest style), not the test name
+        colored_symbol = symbol
+        if hasattr(report, "wasxfail") and report.passed:
+            # Yellow for xpassed
+            colored_symbol = f"\033[33m{symbol}\033[0m"
+        elif hasattr(report, "wasxfail") and report.skipped:
+            # Yellow for xfailed
+            colored_symbol = f"\033[33m{symbol}\033[0m"
+        elif report.passed:
+            # Green for passed
+            colored_symbol = f"\033[32m{symbol}\033[0m"
+        elif report.failed:
+            # Red for failed
+            colored_symbol = f"\033[31m{symbol}\033[0m"
+        elif report.skipped:
+            # Yellow for skipped
+            colored_symbol = f"\033[33m{symbol}\033[0m"
 
-        # Add duration if enabled
+        # Build the result line with right-aligned duration (Pest style)
+        # The symbol is colored, but test name and duration are not
+        left_part = f"  {colored_symbol} {display_name}"
+
         if self._show_duration:
             duration_str = self._format_duration(report.duration)
-            result_line += f" {duration_str}"
+            # Calculate padding to right-align duration
+            # Reserve 1 character for right margin
+            # Need to account for ANSI codes in length calculation
+            visible_len = 2 + 1 + 1 + len(display_name)  # "  " + symbol + " " + name
+            duration_len = len(duration_str)
+            padding_needed = max(1, self._terminal_width - visible_len - duration_len - 1)
+            result_line = f"{left_part}{' ' * padding_needed}{duration_str}"
+        else:
+            result_line = left_part
 
-        # Print with appropriate color based on outcome
-        color_kwargs = {}
-
-        # Handle xpassed (expected fail but passed) - yellow/bold
-        if hasattr(report, "wasxfail") and report.passed:
-            color_kwargs = {"yellow": True, "bold": True}
-        # Handle xfailed (expected fail) - yellow
-        elif hasattr(report, "wasxfail") and report.skipped:
-            color_kwargs = {"yellow": True}
-        # Standard outcomes
-        elif report.passed:
-            color_kwargs = {"green": True}
-        elif report.failed:
-            color_kwargs = {"red": True}
-        elif report.skipped:
-            color_kwargs = {"yellow": True}
-
-        self.write_line(result_line, **color_kwargs)
+        # Write the line without additional coloring
+        self.write_line(result_line)
 
         # Show failure details immediately if failed and context is enabled
         if report.failed and self._show_context:

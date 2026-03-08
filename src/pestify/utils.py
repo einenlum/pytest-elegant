@@ -300,3 +300,33 @@ def extract_test_parts(nodeid: str) -> tuple[str, str, str | None, str | None]:
         class_name = parts[1]
 
     return (file_path, test_name, class_name, parameters)
+
+
+def format_test_name(test_name: str) -> str:
+    """
+    Format a test function name into human-readable format (Pest style).
+
+    Removes 'test_' prefix and converts underscores to spaces.
+
+    Args:
+        test_name: Raw test function name (e.g., 'test_it_extracts_request')
+
+    Returns:
+        Formatted test name (e.g., 'it extracts request')
+
+    Examples:
+        >>> format_test_name('test_it_extracts_request')
+        'it extracts request'
+        >>> format_test_name('test_addition')
+        'addition'
+        >>> format_test_name('test_user_can_login')
+        'user can login'
+        >>> format_test_name('some_test_without_prefix')
+        'some test without prefix'
+    """
+    # Remove 'test_' prefix if present
+    if test_name.startswith("test_"):
+        test_name = test_name[5:]  # Remove 'test_'
+
+    # Replace underscores with spaces
+    return test_name.replace("_", " ")
