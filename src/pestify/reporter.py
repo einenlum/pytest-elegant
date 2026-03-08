@@ -27,14 +27,47 @@ class PestifyTerminalReporter(TerminalReporter):
     - Immediate failure display with context
     - Duration information for each test
     - Colored output (green/red/yellow)
+
+    The reporter extends pytest's built-in TerminalReporter to completely
+    customize the output format. It suppresses pytest's verbose headers,
+    groups tests by file, and displays results in a clean, minimal format
+    inspired by Pest PHP's test output.
+
+    Configuration options (set in pytest.ini or pyproject.toml):
+        - pestify_show_context: Show code context in failure output (default: True)
+        - pestify_group_by_file: Group tests by file with headers (default: True)
+        - pestify_show_duration: Show test duration (default: True)
+
+    Examples:
+        The reporter is automatically registered via the pytest plugin system.
+        To disable it, use the --no-pestify flag:
+
+        >>> pytest --no-pestify  # doctest: +SKIP
+
+        Example output:
+          PASS  tests/test_math.py
+          ✓ test_addition 0.01s
+          ✓ test_subtraction 0.01s
+
+          Tests: 2 passed, 2 total
+          Duration: 0.02s
     """
 
     def __init__(self, config: Config, file: Any = None) -> None:
         """Initialize the Pestify reporter.
 
+        Sets up the reporter with configuration options, initializes tracking
+        variables for test results and file grouping, and detects terminal
+        capabilities for Unicode symbol support.
+
         Args:
-            config: pytest configuration object
+            config: pytest configuration object containing options and settings
             file: optional file object to write to (defaults to sys.stdout)
+
+        Note:
+            This is typically called automatically by pytest during plugin
+            registration. The reporter reads configuration from pytest.ini
+            or pyproject.toml to customize behavior.
         """
         super().__init__(config, file)
         self._current_file: Optional[str] = None
@@ -108,11 +141,25 @@ class PestifyTerminalReporter(TerminalReporter):
     def pytest_runtest_logreport(self, report: TestReport) -> None:
         """Process and format test results as they come in.
 
-        This is the main method that formats each test result in Pest style.
+        This is the main hook method that formats each test result in Pest style.
         It groups tests by file and displays them with ✓/✗ symbols and durations.
 
+        The method is called multiple times per test (setup, call, teardown phases)
+        but only processes the 'call' phase for regular output. It tracks file
+        changes to group tests, accumulates results, and prints file headers when
+        all tests in a file are complete.
+
         Args:
-            report: test report object containing test results
+            report: test report object containing test results including:
+                    - nodeid: full test path (e.g., "tests/test_foo.py::test_bar")
+                    - when: phase of test execution ("setup", "call", or "teardown")
+                    - outcome: test result ("passed", "failed", "skipped")
+                    - duration: test execution time in seconds
+                    - longrepr: detailed failure information if test failed
+
+        Note:
+            This method maintains internal state to track file grouping and
+            statistics. It updates total counts and duration for the final summary.
         """
         # Only process the "call" phase (actual test execution)
         if report.when != "call":
@@ -181,11 +228,23 @@ class PestifyTerminalReporter(TerminalReporter):
     def _get_symbol(self, report: TestReport) -> str:
         """Get the appropriate symbol for a test result.
 
+        Selects the appropriate Unicode or ASCII symbol based on the test
+        outcome and terminal capabilities. Handles special cases like
+        xfailed and xpassed tests.
+
         Args:
-            report: test report object
+            report: test report object with outcome and wasxfail attributes
 
         Returns:
-            Symbol string (✓, ⨯, -, etc.) based on terminal capabilities
+            Symbol string (✓, ⨯, -, x, X, E, etc.) based on:
+            - Test outcome (passed/failed/skipped)
+            - Expected failure status (xfail/xpass)
+            - Terminal Unicode support
+
+        Examples:
+            For a passing test on a Unicode terminal: '✓'
+            For a failing test on ASCII terminal: 'F'
+            For an expected failure that passed: 'X'
         """
         # Handle xpassed (expected to fail but passed)
         if hasattr(report, "wasxfail") and report.passed:
@@ -208,8 +267,17 @@ class PestifyTerminalReporter(TerminalReporter):
     def _print_file_results(self, file_path: str) -> None:
         """Print all results for a given test file.
 
+        Displays a file header (PASS or FAIL) followed by all test results
+        for that file. The header color is green for all passing tests or
+        red if any test in the file failed.
+
         Args:
-            file_path: path to the test file
+            file_path: path to the test file to print results for
+
+        Note:
+            This method is called when all tests in a file have completed,
+            or when moving to a new file. It clears the results for the file
+            after printing to free memory.
         """
         if file_path not in self._file_results:
             return
@@ -242,9 +310,22 @@ class PestifyTerminalReporter(TerminalReporter):
     def _print_test_result(self, report: TestReport, symbol: str) -> None:
         """Print a single test result line.
 
+        Formats and prints a single test result with symbol, name, and duration.
+        Handles special cases like parametrized tests and test classes. Includes
+        failure details immediately if the test failed and context is enabled.
+
         Args:
-            report: test report object
-            symbol: symbol to display (✓, ⨯, etc.)
+            report: test report object containing test information
+            symbol: symbol to display (✓, ⨯, -, etc.) for the test outcome
+
+        Output format:
+            "  ✓ test_name 0.12s"  (for passing test)
+            "  ⨯ test_name 0.45s"  (for failing test)
+            "  - test_skipped"      (for skipped test, if duration disabled)
+
+        Note:
+            The output is colored based on the test outcome (green/red/yellow).
+            Test names are truncated if too long (except in verbose mode).
         """
         # Extract test parts (file, name, class, parameters)
         file_path, test_name, class_name, parameters = extract_test_parts(report.nodeid)
@@ -323,8 +404,23 @@ class PestifyTerminalReporter(TerminalReporter):
     def _print_failure_details(self, report: TestReport) -> None:
         """Print detailed failure information with code context.
 
+        Parses the failure traceback to extract and display the error message,
+        file location, line number, and the failing code line with an arrow
+        (Pest-style). In very verbose mode (-vv), shows the full stack trace.
+
         Args:
-            report: test report object with failure information
+            report: test report object with failure information in longrepr
+
+        Output includes:
+            - Separator line
+            - Error message (e.g., "AssertionError: assert False")
+            - File location and line number
+            - The failing code line with arrow: "→ 4   assert user.is_valid()"
+
+        Note:
+            The level of detail shown depends on the verbosity flag:
+            - Normal mode: Concise error with key information
+            - Verbose mode (-vv): Full stack trace with all details
         """
         if not report.longrepr:
             return
@@ -423,10 +519,23 @@ class PestifyTerminalReporter(TerminalReporter):
     ) -> None:
         """Print final test summary statistics.
 
+        Displays a summary of all test results with counts and total duration.
+        This is called after all tests have completed. It prints any remaining
+        file results if grouping is enabled, then shows the final statistics.
+
         Args:
-            terminalreporter: terminal reporter instance
-            exitstatus: pytest exit status code
+            terminalreporter: terminal reporter instance (self in this case)
+            exitstatus: pytest exit status code (0 = all passed, 1 = failures, etc.)
             config: pytest configuration object
+
+        Output format:
+            Tests: 3 passed, 1 failed, 4 total
+            Duration: 2.34s
+
+        Note:
+            The summary line is colored green if all tests passed, or red if
+            any tests failed. Statistics include passed, failed, skipped,
+            xfailed, and xpassed tests.
         """
         # Print results for the last file if grouping is enabled
         if self._group_by_file and self._current_file is not None:
