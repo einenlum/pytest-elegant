@@ -100,6 +100,9 @@ class ElegantTerminalReporter(TerminalReporter):  # type: ignore[misc]
         # Flag to suppress output during session start header
         self._suppress_output = False
 
+        # Track collection errors separately (they occur during suppressed phase)
+        self._collection_errors: list[Any] = []
+
         # Wrap the terminal writer to intercept writes
         self._original_tw = self._tw
         self._wrap_terminal_writer()
@@ -224,6 +227,20 @@ class ElegantTerminalReporter(TerminalReporter):  # type: ignore[misc]
         # Don't print "collected X items" - we want minimal output
         # Re-enable output after collection (was suppressed since sessionstart)
         self._suppress_output = False
+
+    def pytest_collectreport(self, report: Any) -> None:
+        """Track collection errors.
+
+        Collection happens while output is suppressed, so we capture errors
+        here to display them later in the summary.
+
+        Args:
+            report: collection report object
+        """
+        super().pytest_collectreport(report)
+        if report.failed:
+            self._total_errors += 1
+            self._collection_errors.append(report)
 
     def pytest_runtest_logreport(self, report: TestReport) -> None:
         """Process and format test results as they come in.
@@ -726,6 +743,15 @@ class ElegantTerminalReporter(TerminalReporter):  # type: ignore[misc]
             self._print_file_results(self._current_file)
             self._current_file = None
 
+        # Print collection errors
+        for report in self._collection_errors:
+            badge = "\033[41m\033[97m ERROR \033[0m"
+            self.write_line(f"\n  {badge}  {report.nodeid or 'collection error'}", bold=True)
+            longrepr_str = str(report.longrepr)
+            for line in longrepr_str.split("\n"):
+                self.write_line(f"  {line}")
+            self.write_line("")
+
         # Build summary line
         summary_parts = []
 
@@ -744,6 +770,9 @@ class ElegantTerminalReporter(TerminalReporter):  # type: ignore[misc]
         if self._total_xpassed > 0:
             summary_parts.append(f"{self._total_xpassed} xpassed")
 
+        if self._total_errors > 0:
+            summary_parts.append(f"{self._total_errors} error{'s' if self._total_errors > 1 else ''}")
+
         total_tests = (
             self._total_passed
             + self._total_failed
@@ -758,7 +787,7 @@ class ElegantTerminalReporter(TerminalReporter):  # type: ignore[misc]
         summary_line = "  Tests: " + ", ".join(summary_parts)
 
         # Color the summary based on results
-        if self._total_failed > 0:
+        if self._total_failed > 0 or self._total_errors > 0:
             self.write_line(summary_line, red=True, bold=True)
         else:
             self.write_line(summary_line, green=True, bold=True)
