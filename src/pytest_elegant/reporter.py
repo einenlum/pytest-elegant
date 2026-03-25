@@ -629,12 +629,12 @@ class ElegantTerminalReporter(TerminalReporter):  # type: ignore[misc]
         lines = longrepr_str.split("\n")
 
         # Extract the main error message and location
-        # Skip verbose diff output, "Differing items:", "use `-vv`" messages, etc.
         error_message = None
         error_type = None
         file_location = None
         file_path = None
         line_number = None
+        introspection_lines: list[str] = []
 
         import re
 
@@ -657,20 +657,27 @@ class ElegantTerminalReporter(TerminalReporter):  # type: ignore[misc]
                     except (ValueError, IndexError):
                         pass
 
-            # Get the first meaningful error message (E line with error info)
-            if error_message is None and stripped.startswith("E "):
+            if stripped.startswith("E "):
                 error_content = stripped[2:].strip()
 
-                # Match "SomeName: message" where SomeName has no spaces (exception class)
-                if ": " in error_content:
-                    before_colon = error_content.split(": ", 1)[0]
-                    if " " not in before_colon and before_colon:
-                        error_message = error_content.split(": ", 1)[1]
-                        # Extract error type from the class name (last component)
-                        error_type = before_colon.split(".")[-1]
-                # Skip verbose assertion rewrites with diffs
-                elif error_content.startswith("assert ") and not ('{' in error_content and '...' in error_content):
-                    error_message = error_content
+                # Skip pytest hints about verbosity
+                if "use -v" in error_content.lower():
+                    continue
+
+                if error_message is None:
+                    # Match "SomeName: message" where SomeName has no spaces (exception class)
+                    if ": " in error_content:
+                        before_colon = error_content.split(": ", 1)[0]
+                        if " " not in before_colon and before_colon:
+                            error_message = error_content.split(": ", 1)[1]
+                            # Extract error type from the class name (last component)
+                            error_type = before_colon.split(".")[-1]
+
+                    if error_message is None and error_content.startswith("assert "):
+                        error_message = error_content
+                elif error_content:
+                    # Subsequent E lines are assertion introspection details
+                    introspection_lines.append(error_content)
 
         # If we still don't have an error message, create one from error type
         if error_message is None and error_type:
@@ -678,11 +685,9 @@ class ElegantTerminalReporter(TerminalReporter):  # type: ignore[misc]
 
         # Display the error with elegant formatting
         if error_message:
-            # Clean up assertion messages with verbose comparisons
-            if "assert" in error_message.lower() and "==" in error_message:
-                error_message = "Failed asserting that values are equal."
-
             self.write_line(f"  {error_message}", red=True)
+            for intro_line in introspection_lines:
+                self.write_line(f"  {intro_line}")
 
         # Show file location if available
         if file_location:
