@@ -267,9 +267,15 @@ class ElegantTerminalReporter(TerminalReporter):  # type: ignore[misc]
         """
         # Only process the "call" phase (actual test execution) and setup phase skips
         if report.when != "call":
-            # Handle setup/teardown failures
-            if report.failed and report.when == "setup":
+            # Handle setup/teardown failures (e.g., missing fixture, fixture error)
+            if report.failed and report.when in ("setup", "teardown"):
+                self._total_errors += 1
+                self._collection_errors.append(report)
+                # Call parent with suppressed output to update internal tracking
+                old_suppress = self._suppress_output
+                self._suppress_output = True
                 super().pytest_runtest_logreport(report)
+                self._suppress_output = old_suppress
                 return
             # Handle skips that happen during setup (e.g., @pytest.mark.skip)
             if report.skipped and report.when == "setup":
