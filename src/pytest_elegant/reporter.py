@@ -636,69 +636,45 @@ class ElegantTerminalReporter(TerminalReporter):  # type: ignore[misc]
         file_path = None
         line_number = None
 
+        import re
+
         for i, line in enumerate(lines):
             stripped = line.strip()
 
-            # Extract file location (lines like "tests/test_foo.py:10: AssertionError" or "tests/test_foo.py:10: TypeError")
-            if ":" in stripped and ".py:" in stripped and (
-                "Error" in stripped or "Exception" in stripped
-            ):
-                # Find the error type (AssertionError, TypeError, etc.)
-                for err_type in ["AssertionError", "TypeError", "ValueError", "IndexError", "ZeroDivisionError", "KeyError", "AttributeError"]:
-                    if err_type in stripped:
-                        error_type = err_type
-                        parts = stripped.split(err_type)[0].strip()
-                        if ".py:" in parts:
-                            # Extract path and line number
-                            file_part = parts.rstrip(":")
-                            if ":" in file_part:
-                                try:
-                                    # Split by : to get path and line number
-                                    path_and_line = file_part.split(":")
-                                    if len(path_and_line) >= 2:
-                                        file_path = path_and_line[0] + ".py" if not path_and_line[0].endswith(".py") else path_and_line[0]
-                                        # Handle paths like "tests/test_foo.py:10" correctly
-                                        if file_part.count(":") == 1:
-                                            parts_split = file_part.split(":")
-                                            file_path = parts_split[0]
-                                            line_number = int(parts_split[1])
-                                        else:
-                                            # Multiple colons, take last as line number
-                                            line_number = int(path_and_line[-1])
-                                            file_path = ":".join(path_and_line[:-1])
-                                        file_location = f"{file_path}:{line_number}"
-                                except (ValueError, IndexError):
-                                    pass
-                        break
+            # Extract file location (lines like "tests/test_foo.py:10: SomeException" or "tests/test_foo.py:10: ")
+            if ".py:" in stripped and file_location is None:
+                # Match pattern: path/to/file.py:lineno (optionally followed by ": something")
+                m = re.match(r'^(.+\.py):(\d+):', stripped)
+                if m:
+                    try:
+                        candidate_path = m.group(1)
+                        candidate_line = int(m.group(2))
+                        # Skip library/venv files — only use project files
+                        if ".venv" not in candidate_path and "site-packages" not in candidate_path:
+                            file_path = candidate_path
+                            line_number = candidate_line
+                            file_location = f"{file_path}:{line_number}"
+                    except (ValueError, IndexError):
+                        pass
 
             # Get the first meaningful error message (E line with error info)
             if error_message is None and stripped.startswith("E "):
                 error_content = stripped[2:].strip()
 
-                # For any Error type with a message
-                if any(err in error_content for err in ["Error:", "Exception:"]):
-                    # Extract the error message after the colon
-                    if ": " in error_content:
+                # Match "SomeName: message" where SomeName has no spaces (exception class)
+                if ": " in error_content:
+                    before_colon = error_content.split(": ", 1)[0]
+                    if " " not in before_colon and before_colon:
                         error_message = error_content.split(": ", 1)[1]
-                # For AssertionError with custom message
-                elif "AssertionError: " in error_content:
-                    error_message = error_content.split("AssertionError: ", 1)[1]
+                        # Extract error type from the class name (last component)
+                        error_type = before_colon.split(".")[-1]
                 # Skip verbose assertion rewrites with diffs
                 elif error_content.startswith("assert ") and not ('{' in error_content and '...' in error_content):
                     error_message = error_content
 
         # If we still don't have an error message, create one from error type
         if error_message is None and error_type:
-            if error_type == "AssertionError":
-                error_message = "Assertion failed."
-            elif error_type == "TypeError":
-                error_message = "Type error occurred."
-            elif error_type == "IndexError":
-                error_message = "Index out of range."
-            elif error_type == "ZeroDivisionError":
-                error_message = "Division by zero."
-            else:
-                error_message = f"{error_type} occurred."
+            error_message = f"{error_type} occurred."
 
         # Display the error with elegant formatting
         if error_message:
