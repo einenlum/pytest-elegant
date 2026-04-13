@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
+from _pytest._code.code import ExceptionChainRepr, ReprEntry, ReprFileLocation, ReprTraceback
 from _pytest.config import Config
 from _pytest.reports import TestReport
 from _pytest.terminal import TerminalReporter
@@ -629,6 +630,173 @@ class TestElegantTerminalReporter:
             reporter.pytest_runtest_logreport(report)
             # Should track skipped statistics for setup phase skips
             assert reporter._total_skipped == 1
+
+
+def make_longrepr(path, lineno, message, source_lines=None):
+    """Helper pour construire un longrepr structuré dans les tests."""
+    reprcrash = ReprFileLocation(path=path, lineno=lineno, message=message)
+    entry = ReprEntry(
+        lines=source_lines or [],
+        reprfuncargs=None,
+        reprlocals=None,
+        reprfileloc=reprcrash,
+        style="long",
+    )
+    traceback = ReprTraceback(reprentries=[entry], extraline=None, style="long")
+    return ExceptionChainRepr(chain=[(traceback, reprcrash, None)])
+
+
+class TestPrintFailureDetails:
+    """Tests for _print_failure_details method."""
+
+    @pytest.fixture
+    def reporter(self):
+        """Create a reporter for testing _print_failure_details."""
+        from pathlib import Path
+
+        config = Mock(spec=Config)
+        config.getini = Mock(return_value=True)
+        config.option = Mock()
+        config.option.verbose = 0
+        config.option.color = "yes"
+        config.option.code_highlight = "yes"
+        config.option.reportchars = ""
+        config.option.disable_warnings = False
+        config.option.tbstyle = "auto"
+
+        invocation_params = Mock()
+        invocation_params.dir = Path.cwd()
+        config.invocation_params = invocation_params
+
+        config.pluginmanager = Mock()
+        config.pluginmanager.get_plugin = Mock(return_value=None)
+
+        with patch("pytest_elegant.reporter.get_symbols") as mock_symbols:
+            mock_symbols.return_value = {
+                "passed": "✓",
+                "failed": "⨯",
+                "skipped": "-",
+                "xfailed": "x",
+                "xpassed": "X",
+                "error": "E",
+            }
+            reporter = ElegantTerminalReporter(config)
+            reporter.write_line = Mock()
+            reporter._print_code_context = Mock()
+            return reporter
+
+    def test_no_longrepr_does_nothing(self, reporter):
+        """No output when longrepr is falsy."""
+        report = Mock(spec=TestReport)
+        report.longrepr = None
+
+        reporter._print_failure_details(report)
+        reporter.write_line.assert_not_called()
+
+    def test_simple_assertion(self, reporter):
+        """Plain assertion without exception type."""
+        report = Mock(spec=TestReport)
+        report.longrepr = make_longrepr("tests/test_foo.py", 5, "assert 1 == 2")
+
+        reporter._print_failure_details(report)
+
+        calls = [c[0][0] for c in reporter.write_line.call_args_list]
+        assert any("assert 1 == 2" in line for line in calls)
+        assert any("tests/test_foo.py:5" in line for line in calls)
+
+    def test_exception_with_type(self, reporter):
+        """Exception with type prefix: 'ValueError: boom'."""
+        report = Mock(spec=TestReport)
+        report.longrepr = make_longrepr("tests/test_foo.py", 10, "ValueError: boom")
+
+        reporter._print_failure_details(report)
+
+        calls = [c[0][0] for c in reporter.write_line.call_args_list]
+        assert any("boom" in line for line in calls)
+        assert not any("ValueError: boom" in line for line in calls), \
+            "error type should be stripped from the message"
+
+    def test_assertion_with_introspection(self, reporter):
+        """Multiline message: first line is the error, rest are introspection."""
+        report = Mock(spec=TestReport)
+        report.longrepr = make_longrepr(
+            "tests/test_foo.py", 7,
+            "AssertionError: custom message\nassert False\n  where False = ..."
+        )
+
+        reporter._print_failure_details(report)
+
+        calls = [c[0][0] for c in reporter.write_line.call_args_list]
+        assert any("custom message" in line for line in calls)
+        assert any("assert False" in line for line in calls)
+        assert any("where False" in line for line in calls)
+
+    def test_reprcrash_none_does_not_raise(self, reporter):
+        """If reprcrash is None, should degrade gracefully without raising."""
+        longrepr = make_longrepr("tests/test_foo.py", 1, "AssertionError: oops")
+        longrepr.reprcrash = None  # type: ignore[assignment]
+
+        report = Mock(spec=TestReport)
+        report.longrepr = longrepr
+
+        # Should not raise
+        reporter._print_failure_details(report)
+
+    def test_non_structured_longrepr_fallback(self, reporter):
+        """Non-structured longrepr is printed as a plain string."""
+        report = Mock(spec=TestReport)
+        report.longrepr = "some plain string error"
+
+        reporter._print_failure_details(report)
+
+        calls = [c[0][0] for c in reporter.write_line.call_args_list]
+        assert any("some plain string error" in line for line in calls)
+
+    def test_very_verbose_iterates_chain(self, reporter):
+        """In -vv mode, chain entries are iterated (not str(longrepr))."""
+        reporter._verbosity = 2
+
+        longrepr = make_longrepr(
+            "tests/test_foo.py", 3, "AssertionError: bad",
+            source_lines=["assert x == 1", "E  assert 0 == 1"],
+        )
+
+        report = Mock(spec=TestReport)
+        report.longrepr = longrepr
+
+        reporter._print_failure_details(report)
+
+        calls = [c[0][0] for c in reporter.write_line.call_args_list]
+        assert any("assert x == 1" in line for line in calls)
+
+    def test_very_verbose_chain_message(self, reporter):
+        """In -vv mode, chain linking messages are displayed."""
+        reporter._verbosity = 2
+
+        # Build a two-link chain manually
+        reprcrash1 = ReprFileLocation(path="tests/test_foo.py", lineno=3, message="ValueError: original")
+        entry1 = ReprEntry(lines=["raise ValueError('original')"], reprfuncargs=None,
+                           reprlocals=None, reprfileloc=reprcrash1, style="long")
+        tb1 = ReprTraceback(reprentries=[entry1], extraline=None, style="long")
+
+        reprcrash2 = ReprFileLocation(path="tests/test_foo.py", lineno=8, message="RuntimeError: wrapped")
+        entry2 = ReprEntry(lines=["raise RuntimeError('wrapped') from e"], reprfuncargs=None,
+                           reprlocals=None, reprfileloc=reprcrash2, style="long")
+        tb2 = ReprTraceback(reprentries=[entry2], extraline=None, style="long")
+
+        chain_msg = "The above exception was the direct cause of the following exception:"
+        longrepr = ExceptionChainRepr(chain=[
+            (tb1, reprcrash1, None),
+            (tb2, reprcrash2, chain_msg),
+        ])
+
+        report = Mock(spec=TestReport)
+        report.longrepr = longrepr
+
+        reporter._print_failure_details(report)
+
+        calls = [c[0][0] for c in reporter.write_line.call_args_list]
+        assert any("The above exception" in line for line in calls)
 
 
 class TestPrintTestResult:

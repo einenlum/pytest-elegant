@@ -4,6 +4,37 @@ import shutil
 import sys
 from pathlib import Path
 
+_RESET = "\033[0m"
+
+
+def ansi_red(text: str) -> str:
+    return f"\033[31m{text}{_RESET}"
+
+
+def ansi_green(text: str) -> str:
+    return f"\033[32m{text}{_RESET}"
+
+
+def ansi_yellow(text: str) -> str:
+    return f"\033[33m{text}{_RESET}"
+
+
+def ansi_bold(text: str) -> str:
+    return f"\033[1m{text}{_RESET}"
+
+
+def ansi_bold_yellow(text: str) -> str:
+    return f"\033[1m\033[33m{text}{_RESET}"
+
+
+def ansi_badge(bg: str, fg: str, text: str) -> str:
+    return f"{bg}{fg} {text} {_RESET}"
+
+
+BADGE_PASS = ansi_badge("\033[42m", "\033[30m", "PASS")
+BADGE_FAIL = ansi_badge("\033[41m", "\033[97m", "FAIL")
+BADGE_ERROR = ansi_badge("\033[41m", "\033[97m", "ERROR")
+
 
 def format_duration(seconds: float) -> str:
     """

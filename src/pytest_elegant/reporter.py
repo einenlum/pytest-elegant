@@ -6,6 +6,7 @@ TerminalReporter to produce clean, minimal, elegant output.
 
 from typing import Any, Optional
 
+from _pytest._code.code import ExceptionChainRepr, ReprEntry, ReprExceptionInfo
 from _pytest.config import Config
 from _pytest.reports import TestReport
 from _pytest.terminal import TerminalReporter
@@ -13,6 +14,14 @@ from rich.console import Console
 from rich.syntax import Syntax
 
 from pytest_elegant.utils import (
+    BADGE_ERROR,
+    BADGE_FAIL,
+    BADGE_PASS,
+    ansi_bold,
+    ansi_bold_yellow,
+    ansi_green,
+    ansi_red,
+    ansi_yellow,
     extract_test_parts,
     format_test_name,
     get_symbols,
@@ -410,13 +419,9 @@ class ElegantTerminalReporter(TerminalReporter):  # type: ignore[misc]
         # Print file header with PASS/FAIL status
         has_failures = self._file_has_failures.get(file_path, False)
         if has_failures:
-            # Red badge with white text for FAIL
-            badge = "\033[41m\033[97m FAIL \033[0m"
-            self.write_line(f"\n  {badge}  {display_path}", bold=True)
+            self.write_line(f"\n  {BADGE_FAIL}  {display_path}", bold=True)
         else:
-            # Green badge with dark text for PASS (matching Pest style)
-            badge = "\033[42m\033[30m PASS \033[0m"
-            self.write_line(f"\n  {badge}  {display_path}", bold=True)
+            self.write_line(f"\n  {BADGE_PASS}  {display_path}", bold=True)
 
         # Print each test result
         for report, symbol in results:
@@ -476,20 +481,15 @@ class ElegantTerminalReporter(TerminalReporter):  # type: ignore[misc]
         # Color only the symbol (Pest style), not the test name
         colored_symbol = symbol
         if hasattr(report, "wasxfail") and report.passed:
-            # Yellow for xpassed
-            colored_symbol = f"\033[33m{symbol}\033[0m"
+            colored_symbol = ansi_yellow(symbol)
         elif hasattr(report, "wasxfail") and report.skipped:
-            # Yellow for xfailed
-            colored_symbol = f"\033[33m{symbol}\033[0m"
+            colored_symbol = ansi_yellow(symbol)
         elif report.passed:
-            # Green for passed
-            colored_symbol = f"\033[32m{symbol}\033[0m"
+            colored_symbol = ansi_green(symbol)
         elif report.failed:
-            # Red for failed
-            colored_symbol = f"\033[31m{symbol}\033[0m"
+            colored_symbol = ansi_red(symbol)
         elif report.skipped:
-            # Yellow for skipped
-            colored_symbol = f"\033[33m{symbol}\033[0m"
+            colored_symbol = ansi_yellow(symbol)
 
         # Build the result line with right-aligned duration (Pest style)
         # The symbol is colored, but test name and duration are not
@@ -532,7 +532,7 @@ class ElegantTerminalReporter(TerminalReporter):  # type: ignore[misc]
             seconds = int(duration % 60)
             return f"{minutes}m {seconds}s"
 
-    def _print_code_context(self, file_path: str, failing_line: int, context_before: int = 4, context_after: int = 12) -> None:
+    def _print_code_context(self, file_path: str, failing_line: int, context_before: int = 3, context_after: int = 3) -> None:
         """Print code context around a failing line with syntax highlighting.
 
         Reads the source file and displays a few lines of context around the
@@ -569,8 +569,6 @@ class ElegantTerminalReporter(TerminalReporter):  # type: ignore[misc]
                 code_width=None,
             )
 
-            self.write_line("")
-
             # Create a Rich console that writes to the same output stream
             console = Console(
                 file=self._tw._file,
@@ -585,6 +583,20 @@ class ElegantTerminalReporter(TerminalReporter):  # type: ignore[misc]
         except (FileNotFoundError, IOError, IndexError):
             # If we can't read the file, just skip the context
             pass
+
+    def _format_error_line(self, content: str) -> str:
+        """Format an error line with colored exception type if present.
+
+        Applies bold yellow to the exception type and red to the message,
+        or plain red when there is no exception type (bare assertion).
+        Strips leading whitespace before pattern detection.
+        """
+        stripped = content.strip()
+        if ": " in stripped:
+            before_colon, after_colon = stripped.split(": ", 1)
+            if " " not in before_colon and before_colon:
+                return f"{ansi_bold_yellow(before_colon.split('.')[-1])}{ansi_red(f': {after_colon}')}"
+        return ansi_red(stripped)
 
     def _print_failure_details(self, report: TestReport) -> None:
         """Print detailed failure information with code context.
@@ -613,71 +625,65 @@ class ElegantTerminalReporter(TerminalReporter):  # type: ignore[misc]
         # Print a separator
         self.write_line("  " + "─" * 40)
 
-        # In very verbose mode (-vv), show full stack trace
+        longrepr = report.longrepr
+
+        if not isinstance(longrepr, (ExceptionChainRepr, ReprExceptionInfo)):
+            # Fallback for non-structured cases (should not happen in practice)
+            self.write_line(f"  {longrepr}")
+            return
+
+        # In very verbose mode (-vv), iterate over chain instead of str(longrepr)
         if self._verbosity >= 2:
-            # Show the complete traceback
-            longrepr_str = str(report.longrepr)
-            for line in longrepr_str.split("\n"):
-                if line.strip():
-                    # Add indentation for consistency
-                    self.write_line(f"  {line}")
+            for traceback, loc, chain_msg in longrepr.chain:
+                if chain_msg:
+                    self.write_line(f"\n  {ansi_yellow(chain_msg)}")
+                for entry in traceback.reprentries:
+                    if isinstance(entry, ReprEntry):
+                        if entry.reprfileloc:
+                            fl = entry.reprfileloc
+                            self.write_line(f"\n  {ansi_bold(fl.path)}:{fl.lineno}  {fl.message}")
+                        for line in entry.lines:
+                            if line.startswith("E "):
+                                self.write_line(f"  {self._format_error_line(line[2:])}")
+                            elif line.startswith(">"):
+                                self.write_line(f"  {ansi_yellow('❱')}  {line[1:].strip()}")
+                            else:
+                                self.write_line(f"    {line.rstrip()}")
+                if loc:
+                    first_msg_line = loc.message.split("\n")[0]
+                    self.write_line(f"\n  at {ansi_bold(loc.path)}:{loc.lineno}  {first_msg_line}")
             self.write_line("")
             return
 
-        # Normal mode: show clean Pest-style error
-        longrepr_str = str(report.longrepr)
-        lines = longrepr_str.split("\n")
-
-        # Extract the main error message and location
-        error_message = None
-        error_type = None
-        file_location = None
+        # Extract location from reprcrash
         file_path = None
         line_number = None
+        file_location = None
+
+        if longrepr.reprcrash is not None:
+            file_path = longrepr.reprcrash.path
+            line_number = longrepr.reprcrash.lineno
+            file_location = f"{file_path}:{line_number}"
+
+        # Extract message and introspection lines from reprcrash.message
+        error_message = None
+        error_type = None
         introspection_lines: list[str] = []
 
-        import re
+        if longrepr.reprcrash is not None:
+            message_lines = longrepr.reprcrash.message.split("\n")
+            first_line = message_lines[0]
+            introspection_lines = [l for l in message_lines[1:] if l.strip()]
 
-        for i, line in enumerate(lines):
-            stripped = line.strip()
-
-            # Extract file location (lines like "tests/test_foo.py:10: SomeException" or "tests/test_foo.py:10: ")
-            if ".py:" in stripped and file_location is None:
-                # Match pattern: path/to/file.py:lineno (optionally followed by ": something")
-                m = re.match(r'^(.+\.py):(\d+):', stripped)
-                if m:
-                    try:
-                        candidate_path = m.group(1)
-                        candidate_line = int(m.group(2))
-                        # Skip library/venv files — only use project files
-                        if ".venv" not in candidate_path and "site-packages" not in candidate_path:
-                            file_path = candidate_path
-                            line_number = candidate_line
-                            file_location = f"{file_path}:{line_number}"
-                    except (ValueError, IndexError):
-                        pass
-
-            if stripped.startswith("E "):
-                error_content = stripped[2:].strip()
-
-                # Skip pytest hints about verbosity
-                if "use -v" in error_content.lower():
-                    continue
-
-                if error_message is None:
-                    # Match "SomeName: message" where SomeName has no spaces (exception class)
-                    if ": " in error_content:
-                        before_colon = error_content.split(": ", 1)[0]
-                        if " " not in before_colon and before_colon:
-                            error_message = error_content.split(": ", 1)[1]
-                            # Extract error type from the class name (last component)
-                            error_type = before_colon.split(".")[-1]
-
-                    if error_message is None and error_content.startswith("assert "):
-                        error_message = error_content
-                elif error_content:
-                    # Subsequent E lines are assertion introspection details
-                    introspection_lines.append(error_content)
+            if ": " in first_line:
+                before_colon, after_colon = first_line.split(": ", 1)
+                if " " not in before_colon and before_colon:
+                    error_type = before_colon.split(".")[-1]
+                    error_message = after_colon
+                else:
+                    error_message = first_line
+            else:
+                error_message = first_line
 
         # If we still don't have an error message, create one from error type
         if error_message is None and error_type:
@@ -685,7 +691,8 @@ class ElegantTerminalReporter(TerminalReporter):  # type: ignore[misc]
 
         # Display the error with elegant formatting
         if error_message:
-            self.write_line(f"  {error_message}", red=True)
+            first_line = f"{error_type}: {error_message}" if error_type else error_message
+            self.write_line(f"  {self._format_error_line(first_line)}")
             for intro_line in introspection_lines:
                 self.write_line(f"  {intro_line}")
 
@@ -732,8 +739,7 @@ class ElegantTerminalReporter(TerminalReporter):  # type: ignore[misc]
 
         # Print collection errors
         for report in self._collection_errors:
-            badge = "\033[41m\033[97m ERROR \033[0m"
-            self.write_line(f"\n  {badge}  {report.nodeid or 'collection error'}", bold=True)
+            self.write_line(f"\n  {BADGE_ERROR}  {report.nodeid or 'collection error'}", bold=True)
             longrepr_str = str(report.longrepr)
             for line in longrepr_str.split("\n"):
                 self.write_line(f"  {line}")
