@@ -673,7 +673,7 @@ class ElegantTerminalReporter(TerminalReporter):  # type: ignore[misc]
         if longrepr.reprcrash is not None:
             message_lines = longrepr.reprcrash.message.split("\n")
             first_line = message_lines[0]
-            introspection_lines = [l for l in message_lines[1:] if l.strip()]
+            introspection_lines = [line for line in message_lines[1:] if line.strip()]
 
             if ": " in first_line:
                 before_colon, after_colon = first_line.split(": ", 1)
