@@ -633,7 +633,7 @@ class ElegantTerminalReporter(TerminalReporter):  # type: ignore[misc]
             return
 
         # In very verbose mode (-vv), iterate over chain instead of str(longrepr)
-        if self._verbosity >= 2:
+        if self._verbosity >= 2 and isinstance(longrepr, ExceptionChainRepr):
             for traceback, loc, chain_msg in longrepr.chain:
                 if chain_msg:
                     self.write_line(f"\n  {ansi_yellow(chain_msg)}")
