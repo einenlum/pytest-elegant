@@ -1,5 +1,9 @@
 # pytest-elegant
 
+[![Tests](https://github.com/einenlum/pytest-elegant/actions/workflows/tests.yml/badge.svg)](https://github.com/einenlum/pytest-elegant/actions/workflows/tests.yml)
+[![Ruff](https://img.shields.io/badge/code%20style-ruff-261230.svg)](https://github.com/astral-sh/ruff)
+[![Mypy](https://img.shields.io/badge/type%20checked-mypy-blue.svg)](https://mypy-lang.org/)
+
 A pytest plugin that provides elegant, beautiful test output inspired by [Pest PHP](https://pestphp.com/)'s aesthetic.
 
 ## Features
